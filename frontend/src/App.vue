@@ -6,7 +6,7 @@ import { useApp } from './stores/app'
 import Icon from './components/Icon.vue'
 const { t, locale } = useI18n(); const app = useApp(); const route = useRoute(); const mobileOpen = ref(false)
 const reload = () => window.location.reload()
-const nav = [{ path: '/', key: 'products', icon: 'grid' }, { path: '/calculator', key: 'calculator', icon: 'calculator' }, { path: '/research', key: 'research', icon: 'research' }, { path: '/import', key: 'imports', icon: 'upload' }]
+const nav = [{ path: '/', key: 'products', icon: 'grid' }, { path: '/research', key: 'research', icon: 'research' }, { path: '/import', key: 'imports', icon: 'upload' }]
 watch(locale, value => { localStorage.setItem('genco-language', value); document.documentElement.lang = value }, { immediate: true })
 watch(() => route.path, () => { mobileOpen.value = false; app.clear() })
 onMounted(() => app.loadSettings().catch(app.report))

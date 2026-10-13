@@ -67,6 +67,10 @@ func Open(ctx context.Context, dir, dsn string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Backfill the category list for settings saved before it existed.
+	for i := range s.state.Settings {
+		s.state.Settings[i].Normalize()
+	}
 	return s, nil
 }
 func (s *Store) Close() error {

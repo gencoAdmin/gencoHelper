@@ -15,7 +15,7 @@
       "post": {
         "operationId": "calculate",
         "summary": "calculate",
-        "description": "Debounced unsaved evaluation. Research uses marketMin when present; maximumScenario uses the same recommended channel.",
+        "description": "Debounced unsaved evaluation at the entered selling price. Market bounds are context; maximumScenario uses marketMax on the same recommended channel.",
         "parameters": [],
         "responses": {
           "200": {
@@ -306,6 +306,86 @@
                 "schema": {
                   "$ref": "#/components/schemas/ValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories": {
+      "post": {
+        "operationId": "addCategory",
+        "summary": "addCategory",
+        "description": "Appends a new shared category and saves it as a new preset version. Rejects duplicates case-insensitively.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version or duplicate SKU",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Field validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequest"
               }
             }
           }
@@ -2278,6 +2358,12 @@
               "$ref": "#/components/schemas/Rates"
             }
           },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "categoryReturns": {
             "type": "object",
             "additionalProperties": {
@@ -2312,12 +2398,25 @@
         "required": [
           "version",
           "channels",
+          "categories",
           "categoryReturns",
           "targetMargin",
           "healthyMargin",
           "healthyBuffer",
           "viableMargin",
           "updatedAt"
+        ]
+      },
+      "CategoryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ]
       },
       "ChannelResult": {

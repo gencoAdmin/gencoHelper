@@ -10,13 +10,20 @@ import (
 
 var decimalPattern = regexp.MustCompile(`^\d+(\.\d{1,8})?$`)
 
+// categoryPattern limits names to printable characters and keeps them within the
+// VARCHAR(32) products.category column with margin to spare.
+var categoryPattern = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} &'./-]{0,23}$`)
+
+// ValidCategory reports whether name is an acceptable new category name.
+func ValidCategory(name string) bool { return categoryPattern.MatchString(name) }
+
 type Validation map[string]string
 
 func (v Validation) Error() string { return "Please check the highlighted fields" }
 func valid(s string, max string) bool {
 	return len(s) <= 24 && decimalPattern.MatchString(s) && d(s).Cmp(d(max).Rat) <= 0
 }
-func Validate(in model.Input, identity bool) Validation {
+func Validate(in model.Input, identity bool, categories []string) Validation {
 	e := Validation{}
 	if identity && strings.TrimSpace(in.Name) == "" {
 		e["name"] = "Product name is required"
@@ -30,7 +37,14 @@ func Validate(in model.Input, identity bool) Validation {
 	if len(in.Notes) > 10000 {
 		e["notes"] = "Maximum 10,000 bytes"
 	}
-	if _, ok := model.Defaults().CategoryReturns[in.Category]; !ok {
+	known := false
+	for _, c := range categories {
+		if c == in.Category {
+			known = true
+			break
+		}
+	}
+	if !known {
 		e["category"] = "Choose a valid category"
 	}
 	for k, v := range map[string]string{"cost": in.Cost, "price": in.Price, "fixed": in.Fixed, "packaging": in.Packaging} {
@@ -103,17 +117,28 @@ func ValidateSettings(s model.Settings) Validation {
 	for _, c := range model.Channels {
 		validateRates(e, "channels."+c+".", s.Channels[c], true)
 	}
+	if len(s.Categories) == 0 {
+		e["categories"] = "At least one category is required"
+	}
+	if len(s.Categories) > 100 {
+		e["categories"] = "Maximum 100 categories"
+	}
+	seen := map[string]bool{}
+	for _, c := range s.Categories {
+		if !ValidCategory(c) {
+			e["categories."+c] = "Use up to 24 letters, numbers, spaces, or & ' . / -"
+		}
+		if seen[c] {
+			e["categories."+c] = "Duplicate category"
+		}
+		seen[c] = true
+	}
 	for c, r := range s.CategoryReturns {
-		if _, ok := model.Defaults().CategoryReturns[c]; !ok {
+		if !s.HasCategory(c) {
 			e["categoryReturns."+c] = "Unknown category"
 		}
 		if r != "" && !valid(r, "100") {
 			e["categoryReturns."+c] = "Enter 0–100, or blank to use the channel preset"
-		}
-	}
-	for c := range model.Defaults().CategoryReturns {
-		if _, ok := s.CategoryReturns[c]; !ok {
-			e["categoryReturns."+c] = "Category is required"
 		}
 	}
 	for k, v := range map[string]string{"targetMargin": s.TargetMargin, "healthyMargin": s.HealthyMargin, "healthyBuffer": s.HealthyBuffer, "viableMargin": s.ViableMargin} {
@@ -147,11 +172,8 @@ func Evaluate(in model.Input, s model.Settings) model.Evaluation {
 	if in.Overrides == nil {
 		in.Overrides = map[string]model.Rates{}
 	}
-	ev := model.Evaluation{Input: in, PresetVersion: s.Version, CalculationVersion: "1.0.0", CreatedAt: time.Now().UTC()}
+	ev := model.Evaluation{Input: in, PresetVersion: s.Version, CalculationVersion: "1.1.0", CreatedAt: time.Now().UTC()}
 	price := in.Price
-	if in.MarketMin != "" {
-		price = in.MarketMin
-	}
 	best := zero
 	for i, c := range model.Channels {
 		r, src := Effective(in, s, c)

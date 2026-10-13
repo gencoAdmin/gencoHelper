@@ -28,6 +28,31 @@ func TestOriginalFixtures(t *testing.T) {
 		t.Fatalf("live fixture: %+v", r)
 	}
 }
+
+func TestMarketRangeDoesNotReplaceSellingPrice(t *testing.T) {
+	in := fixture()
+	in.MarketMin, in.MarketMax = "40000", "70000"
+	s := model.Defaults()
+	ev := Evaluate(in, s)
+	base := Evaluate(fixture(), s)
+	if ev.Recommended != base.Recommended || ev.CalculationVersion != "1.1.0" {
+		t.Fatal("market context changed the selected-price recommendation")
+	}
+	for i, r := range ev.Results {
+		if r.Price != in.Price || r.MonthlyProfit != base.Results[i].MonthlyProfit {
+			t.Fatalf("market range replaced the selling price: %+v", r)
+		}
+	}
+	if ev.MaximumScenario == nil || ev.MaximumScenario.Channel != ev.Recommended || ev.MaximumScenario.Price != in.MarketMax {
+		t.Fatal("market maximum must compare the same channel")
+	}
+	// Testing a competitor price is an explicit new scenario with the same costs.
+	in.Price = in.MarketMin
+	low := Evaluate(in, s)
+	if low.Results[0].Price != "40000" || d(low.Results[0].MonthlyProfit).Cmp(d(ev.Results[0].MonthlyProfit).Rat) >= 0 {
+		t.Fatal("explicit price scenario did not change profit")
+	}
+}
 func TestThresholdsAndReconciliation(t *testing.T) {
 	for _, category := range []string{"general", "fashion", "beauty", "electronics", "home"} {
 		in := fixture()

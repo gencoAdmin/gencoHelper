@@ -205,3 +205,49 @@ func TestSharedScreenshotsAndLimits(t *testing.T) {
 	request(t, h, "POST", "/calculate", badInput, 422)
 	_ = s
 }
+
+func TestAddCategoryPersistsAndValidates(t *testing.T) {
+	s, h := testServer(t)
+	// A new category is appended, bumps the preset version, and gets a blank return entry.
+	before := current(s.Store.Read())
+	out := decodeAs[model.Settings](t, request(t, h, "POST", "/categories", map[string]string{"name": "Toys & Games"}, 201))
+	if out.Version != before.Version+1 {
+		t.Fatalf("version not bumped: %d -> %d", before.Version, out.Version)
+	}
+	if !out.HasCategory("Toys & Games") {
+		t.Fatal("category not added")
+	}
+	if _, ok := out.CategoryReturns["Toys & Games"]; !ok {
+		t.Fatal("category return entry missing")
+	}
+	// Case-insensitive duplicates are rejected.
+	request(t, h, "POST", "/categories", map[string]string{"name": "toys & games"}, 409)
+	// Invalid names are rejected before any write.
+	request(t, h, "POST", "/categories", map[string]string{"name": "   "}, 422)
+	request(t, h, "POST", "/categories", map[string]string{"name": strings.Repeat("x", 25)}, 422)
+	// A product can now use the new category.
+	prod := in()
+	prod.SKU = "TOY-1"
+	prod.Category = "Toys & Games"
+	request(t, h, "POST", "/products", SaveRequest{Input: prod}, 201)
+	// An unknown category is still rejected.
+	bad := in()
+	bad.SKU = "BAD-1"
+	bad.Category = "nonexistent"
+	request(t, h, "POST", "/products", SaveRequest{Input: bad}, 422)
+}
+
+func TestSettingsNormalizeBackfillsCategories(t *testing.T) {
+	// A settings record saved before Categories existed is backfilled from CategoryReturns.
+	legacy := model.Settings{CategoryReturns: map[string]string{"general": "", "fashion": "10"}}
+	legacy.Normalize()
+	if !legacy.HasCategory("general") || !legacy.HasCategory("fashion") {
+		t.Fatalf("categories not backfilled: %+v", legacy.Categories)
+	}
+	// A category without a return entry gets a blank one.
+	s := model.Settings{Categories: []string{"general", "custom"}, CategoryReturns: map[string]string{"general": ""}}
+	s.Normalize()
+	if v, ok := s.CategoryReturns["custom"]; !ok || v != "" {
+		t.Fatal("missing return entry not backfilled")
+	}
+}

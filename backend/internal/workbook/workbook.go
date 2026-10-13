@@ -223,7 +223,7 @@ func Preview(path, sheet string, mapping map[string]int, s model.Settings, produ
 				r.Errors = append(r.Errors, k+": formulas are not allowed")
 			}
 		}
-		for k, err := range finance.Validate(in, true) {
+		for k, err := range finance.Validate(in, true, s.Categories) {
 			r.Errors = append(r.Errors, k+": "+err)
 		}
 		if in.SKU != "" && skus[in.SKU] {

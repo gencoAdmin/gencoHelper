@@ -1,15 +1,22 @@
 package model
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 type Rates map[string]string
 
 var Channels = []string{"shelf", "live", "cod", "self", "consignment"}
 var RateKeys = []string{"commission", "payment", "affiliate", "advertising", "promotion", "logisticsRate", "logistics", "shippingIncome", "settlement", "returns"}
 
+// DefaultCategories is the ordered category list seeded into a fresh install.
+var DefaultCategories = []string{"general", "fashion", "beauty", "electronics", "home"}
+
 type Settings struct {
 	Version         int               `json:"version"`
 	Channels        map[string]Rates  `json:"channels"`
+	Categories      []string          `json:"categories"`
 	CategoryReturns map[string]string `json:"categoryReturns"`
 	TargetMargin    string            `json:"targetMargin"`
 	HealthyMargin   string            `json:"healthyMargin"`
@@ -26,7 +33,7 @@ func Defaults() Settings {
 		{"0", "0.7", "0", "0", "31", "0", "9000", "9000", "500", "0"},
 		{"25", "0", "0", "0", "0", "0", "0", "0", "0", "0"},
 	}
-	s := Settings{Version: 1, Channels: map[string]Rates{}, CategoryReturns: map[string]string{"general": "", "fashion": "10", "beauty": "3", "electronics": "5", "home": "3"}, TargetMargin: "15", HealthyMargin: "15", HealthyBuffer: "10", ViableMargin: "8", UpdatedAt: time.Now().UTC()}
+	s := Settings{Version: 1, Channels: map[string]Rates{}, Categories: append([]string{}, DefaultCategories...), CategoryReturns: map[string]string{"general": "", "fashion": "10", "beauty": "3", "electronics": "5", "home": "3"}, TargetMargin: "15", HealthyMargin: "15", HealthyBuffer: "10", ViableMargin: "8", UpdatedAt: time.Now().UTC()}
 	for i, c := range Channels {
 		s.Channels[c] = Rates{}
 		for j, k := range RateKeys {
@@ -34,6 +41,48 @@ func Defaults() Settings {
 		}
 	}
 	return s
+}
+
+// Normalize keeps Categories and CategoryReturns consistent. It backfills the
+// category list from the return-rate keys for records saved before Categories
+// existed, and ensures every category has a (possibly blank) return entry.
+func (s *Settings) Normalize() {
+	if s.CategoryReturns == nil {
+		s.CategoryReturns = map[string]string{}
+	}
+	if len(s.Categories) == 0 {
+		if len(s.CategoryReturns) > 0 {
+			for c := range s.CategoryReturns {
+				s.Categories = append(s.Categories, c)
+			}
+			sort.Strings(s.Categories)
+		} else {
+			s.Categories = append([]string{}, DefaultCategories...)
+		}
+	}
+	seen := map[string]bool{}
+	deduped := s.Categories[:0]
+	for _, c := range s.Categories {
+		if seen[c] {
+			continue
+		}
+		seen[c] = true
+		deduped = append(deduped, c)
+		if _, ok := s.CategoryReturns[c]; !ok {
+			s.CategoryReturns[c] = ""
+		}
+	}
+	s.Categories = deduped
+}
+
+// HasCategory reports whether c is a configured category.
+func (s Settings) HasCategory(c string) bool {
+	for _, x := range s.Categories {
+		if x == c {
+			return true
+		}
+	}
+	return false
 }
 
 type Input struct {

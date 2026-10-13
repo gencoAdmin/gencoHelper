@@ -93,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/settings", s.endpoint(s.settings))
 	mux.HandleFunc("PUT /api/v1/settings", s.endpoint(s.settings))
 	mux.HandleFunc("GET /api/v1/settings/versions", s.endpoint(s.settingVersions))
+	mux.HandleFunc("POST /api/v1/categories", s.endpoint(s.addCategory))
 	mux.HandleFunc("GET /api/v1/products", s.endpoint(s.list))
 	mux.HandleFunc("POST /api/v1/products", s.endpoint(s.save))
 	mux.HandleFunc("GET /api/v1/products/{id}", s.endpoint(s.product))
@@ -141,10 +142,11 @@ func (s *Server) calculate(w http.ResponseWriter, r *http.Request) error {
 	if err := decode(w, r, &in); err != nil {
 		return err
 	}
-	if e := finance.Validate(in, false); len(e) > 0 {
+	cur := current(s.Store.Read())
+	if e := finance.Validate(in, false, cur.Categories); len(e) > 0 {
 		return e
 	}
-	respond(w, 200, finance.Evaluate(in, current(s.Store.Read())))
+	respond(w, 200, finance.Evaluate(in, cur))
 	return nil
 }
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) error {
@@ -156,6 +158,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) error {
 	if err := decode(w, r, &input); err != nil {
 		return err
 	}
+	input.Normalize()
 	if e := finance.ValidateSettings(input); len(e) > 0 {
 		return e
 	}
@@ -172,6 +175,48 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	respond(w, 200, input)
+	return nil
+}
+
+// addCategory appends a new category to the shared settings and saves it as a
+// new preset version, so the category list is durable and shared across the
+// workspace. Existing evaluations keep their frozen preset version.
+func (s *Server) addCategory(w http.ResponseWriter, r *http.Request) error {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := decode(w, r, &req); err != nil {
+		return err
+	}
+	name := strings.TrimSpace(req.Name)
+	if !finance.ValidCategory(name) {
+		return &APIError{Status: 422, Code: "validation", Message: "Enter a valid category name", Fields: map[string]string{"name": "Use up to 24 letters, numbers, spaces, or & ' . / -"}}
+	}
+	var out model.Settings
+	err := s.Store.Change(r.Context(), func(st *model.State) error {
+		cur := current(*st)
+		for _, c := range cur.Categories {
+			if strings.EqualFold(c, name) {
+				return conflict("This category already exists.")
+			}
+		}
+		next := cur
+		next.Categories = append(append([]string{}, cur.Categories...), name)
+		next.CategoryReturns = map[string]string{}
+		for k, v := range cur.CategoryReturns {
+			next.CategoryReturns[k] = v
+		}
+		next.CategoryReturns[name] = ""
+		next.Version++
+		next.UpdatedAt = time.Now().UTC()
+		st.Settings = append(st.Settings, next)
+		out = next
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	respond(w, 201, out)
 	return nil
 }
 func (s *Server) settingVersions(w http.ResponseWriter, r *http.Request) error {
@@ -293,7 +338,7 @@ func validateCompetitors(cs []model.Competitor) error {
 			}
 			in := model.Input{Name: "test", Category: "general", Cost: "0", Price: "1", Orders: "1", Fixed: "0", Packaging: "0", TargetMargin: "0"}
 			in.Cost = v
-			if len(finance.Validate(in, true)) > 0 || workbook.DecimalCompare(v, max) > 0 {
+			if len(finance.Validate(in, true, []string{"general"})) > 0 || workbook.DecimalCompare(v, max) > 0 {
 				e[prefix+k] = "Enter a valid non-negative decimal"
 			}
 		}
@@ -347,7 +392,7 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
 	}
 	req.Input.Name = strings.TrimSpace(req.Input.Name)
 	req.Input.SKU = strings.TrimSpace(req.Input.SKU)
-	if e := finance.Validate(req.Input, true); len(e) > 0 {
+	if e := finance.Validate(req.Input, true, current(s.Store.Read()).Categories); len(e) > 0 {
 		return e
 	}
 	if err := validateCompetitors(req.Competitors); err != nil {
@@ -721,7 +766,7 @@ func (s *Server) runJob(ctx context.Context, id string) {
 			}
 			err = s.Store.Change(ctx, func(st *model.State) error {
 				j := st.Jobs[id]
-				if e := finance.Validate(row.Input, true); len(e) > 0 {
+				if e := finance.Validate(row.Input, true, current(*st).Categories); len(e) > 0 {
 					j.Failed++
 					j.Errors = append(j.Errors, fmt.Sprintf("Row %d: invalid inputs", row.Row))
 				} else if _, err := create(st, row.Input, nil); err != nil {

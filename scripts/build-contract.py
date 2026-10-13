@@ -24,7 +24,8 @@ schemas = {
        "overrides": {"type": "object", "additionalProperties": ref("Rates")}}),
     "Metric": obj({"status": {"type": "string", "enum": ["ok", "undefined", "unattainable"]}, "value": {**decimal, "nullable": True}}),
     "Settings": obj({"version": integer, "channels": {"type": "object", "additionalProperties": ref("Rates")},
-        "categoryReturns": strings, **{k: decimal for k in ["targetMargin", "healthyMargin", "healthyBuffer", "viableMargin"]}, "updatedAt": date}),
+        "categories": array(string), "categoryReturns": strings, **{k: decimal for k in ["targetMargin", "healthyMargin", "healthyBuffer", "viableMargin"]}, "updatedAt": date}),
+    "CategoryRequest": obj({"name": string}),
     "ChannelResult": obj({"channel": string, "rates": ref("Rates"), "sources": strings,
         **{k: decimal for k in ["price", "successfulSales", "revenue", "shippingIncome", "contribution", "contributionPerOrder", "profitPerOrder", "monthlyProfit", "margin"]},
         **{k: ref("Metric") for k in ["breakEvenOrders", "breakEvenPrice", "maxSupplierCost", "priceBuffer", "maxAdvertising", "breakEvenROAS", "targetPrice", "targetCost"]},
@@ -65,10 +66,11 @@ def operation(path, method, name, response=None, request=None, code=200, descrip
     paths.setdefault(path, {})[method.lower()] = spec
 
 query = lambda name: {"in": "query", "name": name, "schema": string}
-operation("/calculate","post","calculate",ref("EvaluationRevision"),ref("CalculationInput"),description="Debounced unsaved evaluation. Research uses marketMin when present; maximumScenario uses the same recommended channel.")
+operation("/calculate","post","calculate",ref("EvaluationRevision"),ref("CalculationInput"),description="Debounced unsaved evaluation at the entered selling price. Market bounds are context; maximumScenario uses marketMax on the same recommended channel.")
 operation("/settings","get","getSettings",ref("Settings"))
 operation("/settings","put","updateSettings",ref("Settings"),ref("Settings"),description="Requires current version. Creates a new preset version and leaves saved evaluations untouched.")
 operation("/settings/versions","get","getPresetVersions",array(ref("Settings")))
+operation("/categories","post","addCategory",ref("Settings"),ref("CategoryRequest"),201,description="Appends a new shared category and saves it as a new preset version. Rejects duplicates case-insensitively.")
 operation("/products","get","listProducts",obj({"items": array(ref("ProductSummary")), "total": integer}),params=[query(k) for k in ["search","category","channel","verdict","archived","sort","direction"]])
 operation("/products","post","createProduct",ref("Product"),ref("SaveRequest"),201,description="Always calculates on the server. SKU is optional and unique across archived and active products.")
 operation("/products/{id}","get","getProduct",ref("Product"))
