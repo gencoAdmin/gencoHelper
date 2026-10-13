@@ -1,0 +1,4 @@
+[client]
+user=genco_backup
+password=CHANGE_BACKUP_PASSWORD
+host=localhost

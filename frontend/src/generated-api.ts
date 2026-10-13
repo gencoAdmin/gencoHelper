@@ -1,0 +1,22 @@
+// Generated from api/openapi.json by scripts/build-contract.py. Do not edit.
+export type Rates = Record<string, string>
+export type EffectiveRates = { rates: Rates; sources: Record<string, string> }
+export type CalculationInput = { name: string; sku: string; category: string; notes: string; marketMin: string; marketMax: string; cost: string; price: string; orders: string; fixed: string; packaging: string; targetMargin: string; overrides: Record<string, Rates> }
+export type Metric = { status: "ok" | "undefined" | "unattainable"; value: string | null }
+export type Settings = { version: number; channels: Record<string, Rates>; categoryReturns: Record<string, string>; targetMargin: string; healthyMargin: string; healthyBuffer: string; viableMargin: string; updatedAt: string }
+export type ChannelResult = { channel: string; rates: Rates; sources: Record<string, string>; price: string; successfulSales: string; revenue: string; shippingIncome: string; contribution: string; contributionPerOrder: string; profitPerOrder: string; monthlyProfit: string; margin: string; breakEvenOrders: Metric; breakEvenPrice: Metric; maxSupplierCost: Metric; priceBuffer: Metric; maxAdvertising: Metric; breakEvenROAS: Metric; targetPrice: Metric; targetCost: Metric; verdict: "healthy" | "viable" | "thin" | "unprofitable"; reason: string; breakdown: Array<{ key: string; value: string }>; volume: Array<{ orders: string; profit: string }> }
+export type EvaluationRevision = { id: string; input: CalculationInput; presetVersion: number; calculationVersion: string; results: Array<ChannelResult>; recommended: string; maximumScenario?: ChannelResult; createdAt: string }
+export type Competitor = { id: string; platform: string; shop: string; url: string; price: string; sales: string; rating: string }
+export type ProductImage = { id: string; name: string; url: string; thumbnail: string; createdAt: string }
+export type Product = { id: string; version: number; archived: boolean; input: CalculationInput; competitors: Array<Competitor> | null; images: Array<ProductImage>; revisions: Array<EvaluationRevision>; createdAt: string; updatedAt: string }
+export type ProductSummary = { id: string; version: number; archived: boolean; input: CalculationInput; createdAt: string; updatedAt: string; evaluation: EvaluationRevision; headline: ChannelResult; imageCount: number; competitorCount: number }
+export type SaveRequest = { version?: number; input: CalculationInput; competitors?: Array<Competitor> }
+export type VersionRequest = { version: number }
+export type ImportRow = { row: number; input: CalculationInput; errors: Array<string> }
+export type Preview = { id: string; rows: Array<ImportRow>; createdAt: string; jobId: string }
+export type ImportUpload = { id: string; sheets: Array<{ name: string; headers: Array<string>; rowCount: number }>; mapping: Record<string, number> }
+export type PreviewRequest = { uploadId: string; sheet: string; mapping: Record<string, number> }
+export type CommitRequest = { previewId: string; rows: Array<number> }
+export type ExportRequest = { ids?: Array<string>; filters?: Record<string, string>; format: "xlsx" | "csv"; locale: "en" | "id" | "zh" }
+export type JobStatus = { id: string; kind: "import" | "export"; status: "pending" | "running" | "completed" | "failed"; total: number; processed: number; created: number; skipped: number; failed: number; errors: Array<string>; createdAt: string; leaseUntil: string; artifact?: string; format?: string; locale?: string }
+export type ValidationError = { code: string; message: string; fields?: Record<string, string> }

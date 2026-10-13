@@ -1,0 +1,28 @@
+[Unit]
+Description=Genco product profitability service
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=genco-finance
+Group=genco-finance
+WorkingDirectory=/var/lib/genco-finance
+EnvironmentFile=/etc/genco-finance/service.env
+ExecStart=/opt/genco-finance/current/bin/genco-finance
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/genco-finance
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

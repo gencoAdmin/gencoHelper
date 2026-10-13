@@ -1,0 +1,9 @@
+[Unit]
+Description=Consistent Genco database and image backup
+
+[Service]
+Type=oneshot
+ExecStart=/opt/genco-finance/current/deploy/backup.sh
+User=root
+Group=root
+UMask=0077

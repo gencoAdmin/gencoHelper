@@ -1,0 +1,13 @@
+frontend/node_modules/
+frontend/dist/
+frontend/.ssr-test/
+bin/
+data/
+artifacts/
+*.log
+*.tmp
+__pycache__/
+.env
+deploy/*.env
+!deploy/*.env.example
+/demo

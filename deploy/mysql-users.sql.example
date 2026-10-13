@@ -1,0 +1,8 @@
+-- Run as the local MySQL administrator. Replace all three passwords.
+CREATE DATABASE genco_finance CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+CREATE USER 'genco_runtime'@'127.0.0.1' IDENTIFIED BY 'CHANGE_RUNTIME_PASSWORD';
+CREATE USER 'genco_migrate'@'127.0.0.1' IDENTIFIED BY 'CHANGE_MIGRATION_PASSWORD';
+CREATE USER 'genco_backup'@'localhost' IDENTIFIED BY 'CHANGE_BACKUP_PASSWORD';
+GRANT SELECT, INSERT, UPDATE, DELETE ON genco_finance.* TO 'genco_runtime'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON genco_finance.* TO 'genco_migrate'@'127.0.0.1';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT ON genco_finance.* TO 'genco_backup'@'localhost';
