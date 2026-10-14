@@ -1,6 +1,7 @@
 import { createI18n } from 'vue-i18n'
 const entries: Record<string, [string, string, string]> = {
  analysisChannel: ['Channel for analysis', 'Saluran untuk analisis', '分析渠道'],
+ selectedChannel: ['Selected', 'Terpilih', '已选'],
  pricingCosts: ['Pricing & unit costs', 'Harga & biaya per unit', '定价与单位成本'],
  pricingCostsHint: ['Set your selling price and the cost of each order.', 'Tentukan harga jual dan biaya setiap pesanan.', '设置售价和每单成本。'],
  monthlyPlan: ['Monthly plan', 'Rencana bulanan', '月度计划'],
@@ -24,7 +25,7 @@ const entries: Record<string, [string, string, string]> = {
  saved: ['Saved evaluations', 'Evaluasi tersimpan', '已保存测算'], newProduct: ['Evaluate a product', 'Evaluasi produk', '测算产品'], quickCalc: ['Quick calculation', 'Perhitungan cepat', '快速计算'], allProducts: ['All products', 'Semua produk', '全部产品'], search: ['Search products or SKU…', 'Cari produk atau SKU…', '搜索产品或 SKU…'],
  allCategories: ['All categories', 'Semua kategori', '全部分类'], allChannels: ['All channels', 'Semua saluran', '全部渠道'], allVerdicts: ['All verdicts', 'Semua penilaian', '全部结论'], active: ['Active', 'Aktif', '使用中'], archived: ['Archived', 'Diarsipkan', '已归档'], all: ['All', 'Semua', '全部'],
  updated: ['Last updated', 'Terakhir diperbarui', '最近更新'], created: ['Date created', 'Tanggal dibuat', '创建日期'], margin: ['Operating margin', 'Margin operasional', '营业利润率'], profit: ['Monthly profit', 'Laba bulanan', '月营业利润'],
- product: ['Product', 'Produk', '产品'], category: ['Category', 'Kategori', '分类'], price: ['Selling price', 'Harga jual', '售价'], evaluatedPrice: ['Evaluated price', 'Harga evaluasi', '测算价格'], cost: ['Product cost', 'Biaya produk', '产品成本'], orders: ['Monthly orders', 'Pesanan bulanan', '月订单量'], channel: ['Recommended channel', 'Saluran rekomendasi', '推荐渠道'], verdict: ['Verdict', 'Penilaian', '结论'],
+ product: ['Product', 'Produk', '产品'], category: ['Category', 'Kategori', '分类'], price: ['Selling price', 'Harga jual', '售价'], evaluatedPrice: ['Evaluated price', 'Harga evaluasi', '测算价格'], cost: ['Product cost', 'Biaya produk', '产品成本'], orders: ['Monthly orders', 'Pesanan bulanan', '月订单量'], channel: ['Channel', 'Saluran', '渠道'], verdict: ['Verdict', 'Penilaian', '结论'],
  healthy: ['Healthy', 'Sehat', '健康'], viable: ['Viable', 'Layak', '可行'], thin: ['Thin margin', 'Margin tipis', '利润微薄'], unprofitable: ['Unprofitable', 'Merugi', '亏损'],
  general: ['General', 'Umum', '通用'], fashion: ['Fashion', 'Fesyen', '时尚'], beauty: ['Beauty', 'Kecantikan', '美妆'], electronics: ['Electronics', 'Elektronik', '电子'], home: ['Home & living', 'Rumah tangga', '家居'],
  addCategory: ['Add category', 'Tambah kategori', '添加分类'], categoryNamePlaceholder: ['New category name', 'Nama kategori baru', '新分类名称'], categoryNameRequired: ['Enter a category name', 'Masukkan nama kategori', '请输入分类名称'], categoryExists: ['This category already exists', 'Kategori ini sudah ada', '该分类已存在'],

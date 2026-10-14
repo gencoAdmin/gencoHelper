@@ -1823,7 +1823,7 @@
       "post": {
         "operationId": "createExport",
         "summary": "createExport",
-        "description": "Explicit IDs or all matching filters. Freezes products and latest saved revisions; never recalculates. Reports expire after 24 hours.",
+        "description": "Explicit IDs or all matching filters. Freezes products and latest saved revisions; never recalculates. The summary reflects each evaluation's selected channel, falling back to the recommended channel. Reports expire after 24 hours.",
         "parameters": [],
         "responses": {
           "202": {
@@ -2613,6 +2613,9 @@
           "recommended": {
             "type": "string"
           },
+          "selectedChannel": {
+            "type": "string"
+          },
           "maximumScenario": {
             "$ref": "#/components/schemas/ChannelResult"
           },
@@ -2628,6 +2631,7 @@
           "calculationVersion",
           "results",
           "recommended",
+          "selectedChannel",
           "createdAt"
         ]
       },
@@ -2823,6 +2827,9 @@
             "items": {
               "$ref": "#/components/schemas/Competitor"
             }
+          },
+          "channel": {
+            "type": "string"
           }
         },
         "required": [

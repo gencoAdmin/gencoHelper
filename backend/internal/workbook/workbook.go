@@ -329,13 +329,8 @@ func Export(w io.Writer, products []model.Product, format, locale, base string) 
 	summaries := [][]any{}
 	for _, p := range products {
 		ev := p.Latest()
-		var r model.Result
-		for _, v := range ev.Results {
-			if v.Channel == ev.Recommended {
-				r = v
-			}
-		}
-		summaries = append(summaries, []any{p.Input.Name, p.Input.SKU, labels(locale, p.Input.Category), labels(locale, ev.Recommended), numeric(r.Price), numeric(ev.Input.Cost), numeric(ev.Input.Orders), numeric(r.Margin), numeric(r.MonthlyProfit), labels(locale, r.Verdict), ev.ID, ev.PresetVersion, ev.CalculationVersion})
+		r := ev.ActiveResult()
+		summaries = append(summaries, []any{p.Input.Name, p.Input.SKU, labels(locale, p.Input.Category), labels(locale, ev.ActiveChannel()), numeric(r.Price), numeric(ev.Input.Cost), numeric(ev.Input.Orders), numeric(r.Margin), numeric(r.MonthlyProfit), labels(locale, r.Verdict), ev.ID, ev.PresetVersion, ev.CalculationVersion})
 	}
 	if format == "csv" {
 		if _, err := io.WriteString(w, "\ufeff"); err != nil {

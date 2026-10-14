@@ -242,13 +242,7 @@ func (s *Server) settingVersions(w http.ResponseWriter, r *http.Request) error {
 }
 func summary(p model.Product) map[string]any {
 	ev := p.Latest()
-	var best model.Result
-	for _, r := range ev.Results {
-		if r.Channel == ev.Recommended {
-			best = r
-		}
-	}
-	return map[string]any{"id": p.ID, "version": p.Version, "archived": p.Archived, "input": p.Input, "createdAt": p.CreatedAt, "updatedAt": p.UpdatedAt, "evaluation": ev, "headline": best, "imageCount": len(p.Images), "competitorCount": len(p.Competitors)}
+	return map[string]any{"id": p.ID, "version": p.Version, "archived": p.Archived, "input": p.Input, "createdAt": p.CreatedAt, "updatedAt": p.UpdatedAt, "evaluation": ev, "headline": ev.ActiveResult(), "imageCount": len(p.Images), "competitorCount": len(p.Competitors)}
 }
 func filtered(st model.State, q url.Values) []model.Product {
 	out := []model.Product{}
@@ -264,16 +258,10 @@ func filtered(st model.State, q url.Values) []model.Product {
 			continue
 		}
 		ev := p.Latest()
-		if q.Get("channel") != "" && q.Get("channel") != ev.Recommended {
+		if q.Get("channel") != "" && q.Get("channel") != ev.ActiveChannel() {
 			continue
 		}
-		best := model.Result{}
-		for _, res := range ev.Results {
-			if res.Channel == ev.Recommended {
-				best = res
-			}
-		}
-		if q.Get("verdict") != "" && q.Get("verdict") != best.Verdict {
+		if q.Get("verdict") != "" && q.Get("verdict") != ev.ActiveResult().Verdict {
 			continue
 		}
 		out = append(out, p)
@@ -281,16 +269,11 @@ func filtered(st model.State, q url.Values) []model.Product {
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		get := func(p model.Product, field string) string {
-			ev := p.Latest()
-			for _, r := range ev.Results {
-				if r.Channel == ev.Recommended {
-					if field == "margin" {
-						return r.Margin
-					}
-					return r.MonthlyProfit
-				}
+			r := p.Latest().ActiveResult()
+			if field == "margin" {
+				return r.Margin
 			}
-			return "0"
+			return r.MonthlyProfit
 		}
 		var cmp int
 		switch q.Get("sort") {
@@ -371,7 +354,20 @@ func validateCompetitors(cs []model.Competitor) error {
 	}
 	return nil
 }
-func create(st *model.State, in model.Input, cs []model.Competitor) (model.Product, error) {
+// validChannel reports whether c is empty (defer to the recommended channel)
+// or a known channel.
+func validChannel(c string) bool {
+	if c == "" {
+		return true
+	}
+	for _, x := range model.Channels {
+		if x == c {
+			return true
+		}
+	}
+	return false
+}
+func create(st *model.State, in model.Input, cs []model.Competitor, channel string) (model.Product, error) {
 	if in.Overrides == nil {
 		in.Overrides = map[string]model.Rates{}
 	}
@@ -384,6 +380,7 @@ func create(st *model.State, in model.Input, cs []model.Competitor) (model.Produ
 	}
 	now := time.Now().UTC()
 	ev := finance.Evaluate(in, current(*st))
+	ev.SelectedChannel = channel
 	ev.ID = store.ID()
 	for i := range cs {
 		cs[i].ID = store.ID()
@@ -397,6 +394,9 @@ type SaveRequest struct {
 	Version     int                `json:"version"`
 	Input       model.Input        `json:"input"`
 	Competitors []model.Competitor `json:"competitors"`
+	// Channel is the channel this evaluation is saved for. Empty means defer to
+	// the recommended (best monthly profit) channel.
+	Channel string `json:"channel"`
 }
 
 func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
@@ -412,6 +412,9 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
 	if e := finance.Validate(req.Input, true, current(s.Store.Read()).Categories); len(e) > 0 {
 		return e
 	}
+	if !validChannel(req.Channel) {
+		return bad("Unknown channel")
+	}
 	if err := validateCompetitors(req.Competitors); err != nil {
 		return err
 	}
@@ -419,7 +422,7 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
 	err := s.Store.Change(r.Context(), func(st *model.State) error {
 		if r.Method == "POST" {
 			var err error
-			p, err = create(st, req.Input, req.Competitors)
+			p, err = create(st, req.Input, req.Competitors, req.Channel)
 			return err
 		}
 		old, ok := st.Products[r.PathValue("id")]
@@ -446,8 +449,15 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
 		p.UpdatedAt = time.Now().UTC()
 		if string(before) != string(after) {
 			ev := finance.Evaluate(req.Input, current(*st))
+			ev.SelectedChannel = req.Channel
 			ev.ID = store.ID()
 			p.Revisions = append(p.Revisions, ev)
+		} else if p.Latest().SelectedChannel != req.Channel {
+			// Inputs are unchanged, so no new revision is created, but the chosen
+			// channel is a deliberate decision to record on the latest evaluation.
+			// Copy the slice first to avoid mutating the stored product in place.
+			p.Revisions = append([]model.Evaluation{}, p.Revisions...)
+			p.Revisions[len(p.Revisions)-1].SelectedChannel = req.Channel
 		}
 		st.Products[p.ID] = p
 		return nil
@@ -491,7 +501,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) error {
 				in.Name = string([]rune(in.Name)[:200])
 			}
 			var err error
-			p, err = create(st, in, append([]model.Competitor{}, old.Competitors...))
+			p, err = create(st, in, append([]model.Competitor{}, old.Competitors...), old.Latest().SelectedChannel)
 			return err
 		case "archive":
 			p.Archived = true
@@ -499,6 +509,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) error {
 			p.Archived = false
 		case "recalculate":
 			ev := finance.Evaluate(old.Input, current(*st))
+			ev.SelectedChannel = old.Latest().SelectedChannel
 			ev.ID = store.ID()
 			p.Revisions = append(p.Revisions, ev)
 		default:
@@ -809,7 +820,7 @@ func (s *Server) runJob(ctx context.Context, id string) {
 				if e := finance.Validate(row.Input, true, current(*st).Categories); len(e) > 0 {
 					j.Failed++
 					j.Errors = append(j.Errors, fmt.Sprintf("Row %d: invalid inputs", row.Row))
-				} else if p, err := create(st, row.Input, nil); err != nil {
+				} else if p, err := create(st, row.Input, nil, ""); err != nil {
 					j.Skipped++
 					j.Errors = append(j.Errors, fmt.Sprintf("Row %d: %s", row.Row, err.Error()))
 				} else {

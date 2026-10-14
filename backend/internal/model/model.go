@@ -145,8 +145,34 @@ type Evaluation struct {
 	CalculationVersion string    `json:"calculationVersion"`
 	Results            []Result  `json:"results"`
 	Recommended        string    `json:"recommended"`
+	SelectedChannel    string    `json:"selectedChannel"`
 	MaximumScenario    *Result   `json:"maximumScenario,omitempty"`
 	CreatedAt          time.Time `json:"createdAt"`
+}
+
+// ActiveChannel is the channel this evaluation is saved for. It falls back to
+// the recommended (best monthly profit) channel for evaluations saved before a
+// channel could be chosen, so older records keep behaving as they did.
+func (e Evaluation) ActiveChannel() string {
+	if e.SelectedChannel != "" {
+		return e.SelectedChannel
+	}
+	return e.Recommended
+}
+
+// ActiveResult returns the result for the evaluation's active channel, falling
+// back to the first result if none matches.
+func (e Evaluation) ActiveResult() Result {
+	active := e.ActiveChannel()
+	for _, r := range e.Results {
+		if r.Channel == active {
+			return r
+		}
+	}
+	if len(e.Results) > 0 {
+		return e.Results[0]
+	}
+	return Result{}
 }
 type Competitor struct {
 	ID       string `json:"id"`

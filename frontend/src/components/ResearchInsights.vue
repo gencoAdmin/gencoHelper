@@ -9,7 +9,7 @@ const props = defineProps<{ evaluation: EvaluationRevision; competitors: Competi
 const emit = defineEmits<{ price: [value: string]; cost: [value: string]; 'update:channel': [value: string] }>()
 const { t } = useI18n()
 const summary = computed(() => marketSummary(props.competitors))
-const result = computed(() => props.evaluation.results.find(r => r.channel === (props.channel || props.evaluation.recommended)) || props.evaluation.results[0]!)
+const result = computed(() => props.evaluation.results.find(r => r.channel === (props.channel || props.evaluation.selectedChannel || props.evaluation.recommended)) || props.evaluation.results[0]!)
 const bounds = computed(() => ({ min: props.evaluation.input.marketMin || summary.value.min, max: props.evaluation.input.marketMax || summary.value.max }))
 const fit = computed(() => {
  const target = result.value.targetPrice.value

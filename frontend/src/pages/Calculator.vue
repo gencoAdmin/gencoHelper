@@ -55,6 +55,7 @@ onMounted(async () => {
    const p = await api<Product>(`/products/${route.params.id}`)
    input.value = { ...p.input, overrides: p.input.overrides || {} }
    active.value.competitors = p.competitors || []; active.value.existingImages = p.images; active.value.version = p.version; active.value.productId = p.id
+   active.value.channel = p.revisions[p.revisions.length - 1]?.selectedChannel || ''
   } else initializeMargin(app.settings?.targetMargin || '15')
   initialized.value = true; await calculate()
  } catch(e) { app.report(e) }
@@ -76,7 +77,7 @@ function selectAll(event: Event) { selectedDrafts.value = (event.target as HTMLI
 async function saveDraft(draft: ResearchDraft) {
  // Remember successful creation immediately so retries after an image failure
  // update the existing product rather than creating another evaluation.
- let p = await api<Product>(draft.productId ? `/products/${draft.productId}` : '/products', json(draft.productId ? 'PUT' : 'POST', { version: draft.version, input: draft.input, competitors: draft.competitors }))
+ let p = await api<Product>(draft.productId ? `/products/${draft.productId}` : '/products', json(draft.productId ? 'PUT' : 'POST', { version: draft.version, input: draft.input, competitors: draft.competitors, channel: draft.channel }))
  draft.productId = p.id; draft.version = p.version
  while (draft.removedImages.length) {
   p = await api<Product>(`/products/${p.id}/images/${draft.removedImages[0]}`, json('DELETE', { version: p.version }))

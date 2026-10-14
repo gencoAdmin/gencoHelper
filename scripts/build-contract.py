@@ -32,14 +32,14 @@ schemas = {
         "verdict": {"type": "string", "enum": ["healthy", "viable", "thin", "unprofitable"]}, "reason": string,
         "breakdown": array(obj({"key": string, "value": decimal})), "volume": array(obj({"orders": decimal, "profit": decimal}))}),
     "EvaluationRevision": obj({"id": string, "input": ref("CalculationInput"), "presetVersion": integer, "calculationVersion": string,
-        "results": array(ref("ChannelResult")), "recommended": string, "maximumScenario": ref("ChannelResult"), "createdAt": date}, ["maximumScenario"]),
+        "results": array(ref("ChannelResult")), "recommended": string, "selectedChannel": string, "maximumScenario": ref("ChannelResult"), "createdAt": date}, ["maximumScenario"]),
     "Competitor": obj({**{k: string for k in ["id", "platform", "shop", "url"]}, **{k: decimal for k in ["price", "sales", "rating"]}}),
     "ProductImage": obj({**{k: string for k in ["id", "name", "url", "thumbnail"]}, "createdAt": date}),
     "Product": obj({"id": string, "version": integer, "archived": boolean, "input": ref("CalculationInput"),
         "competitors": {**array(ref("Competitor")), "nullable": True}, "images": array(ref("ProductImage")), "revisions": array(ref("EvaluationRevision")), "createdAt": date, "updatedAt": date}),
     "ProductSummary": obj({"id": string, "version": integer, "archived": boolean, "input": ref("CalculationInput"), "createdAt": date, "updatedAt": date,
         "evaluation": ref("EvaluationRevision"), "headline": ref("ChannelResult"), "imageCount": integer, "competitorCount": integer}),
-    "SaveRequest": obj({"version": integer, "input": ref("CalculationInput"), "competitors": array(ref("Competitor"))}, ["version", "competitors"]),
+    "SaveRequest": obj({"version": integer, "input": ref("CalculationInput"), "competitors": array(ref("Competitor")), "channel": string}, ["version", "competitors", "channel"]),
     "VersionRequest": obj({"version": integer}),
     "ImportRow": obj({"row": integer, "input": ref("CalculationInput"), "errors": array(string), "evaluation": ref("EvaluationRevision")}, ["evaluation"]),
     "Preview": obj({"id": string, "rows": array(ref("ImportRow")), "createdAt": date, "jobId": string}),
@@ -85,7 +85,7 @@ operation("/imports/template","get","downloadImportTemplate",binary=True,params=
 operation("/imports/upload","post","uploadWorkbook",ref("ImportUpload"),obj({"file": {"type":"string","format":"binary"}}),201,multipart=True,description=".xlsx up to 10 MB, 5,000 data rows per sheet, 20 sheets, 200 columns, 64 MB uncompressed. Expires in 24 hours.")
 operation("/imports/preview","post","previewImport",ref("Preview"),ref("PreviewRequest"),description="Zero-based source-column indices. Creates no products; formulas and duplicate SKUs are rejected. Valid rows include the same five-channel analysis as /calculate. Source row numbers include the header.")
 operation("/imports/commit","post","commitImport",ref("JobStatus"),ref("CommitRequest"),202,description="Select valid source row numbers. Saves the reviewed preview analysis as individual evaluations. Idempotent by preview ID. Worker rechecks SKU uniqueness and checkpoints each committed row.")
-operation("/exports","post","createExport",ref("JobStatus"),ref("ExportRequest"),202,description="Explicit IDs or all matching filters. Freezes products and latest saved revisions; never recalculates. Reports expire after 24 hours.")
+operation("/exports","post","createExport",ref("JobStatus"),ref("ExportRequest"),202,description="Explicit IDs or all matching filters. Freezes products and latest saved revisions; never recalculates. The summary reflects each evaluation's selected channel, falling back to the recommended channel. Reports expire after 24 hours.")
 operation("/jobs/{id}","get","getJobStatus",ref("JobStatus"))
 operation("/jobs/{id}/download","get","downloadJobReport",binary=True)
 for kind in ["live","ready"]: operation("/health/"+kind,"get",kind+"Health",obj({"status":string}))
