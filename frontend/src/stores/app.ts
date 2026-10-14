@@ -9,7 +9,7 @@ export const useApp = defineStore('app', () => {
  // Appends a shared category and keeps local settings in sync with the new version.
  async function addCategory(name: string) { const next = await api<Settings>('/categories', json('POST', { name })); settings.value = next; return next }
  function clear() { notice.value = ''; error.value = ''; fields.value = {}; conflict.value = false }
- function report(e: unknown) { error.value = e instanceof Error ? e.message : String(e); if (e instanceof ApiError) { fields.value = e.fields; conflict.value = e.status === 409 } }
+ function report(e: unknown) { clear(); error.value = e instanceof Error ? e.message : String(e); if (e instanceof ApiError) { fields.value = e.fields; conflict.value = e.status === 409 && e.code === 'version_conflict' } }
  function success(message: string) { clear(); notice.value = message }
  return { settings, notice, error, fields, conflict, categories, loadSettings, addCategory, report, success, clear }
 })

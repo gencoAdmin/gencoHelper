@@ -100,7 +100,7 @@ func (s *Server) uploadImage(w http.ResponseWriter, r *http.Request) error {
 			return missing()
 		}
 		if old.Version != v {
-			return conflict("This product has changed. Reload before uploading.")
+			return versionConflict("This product has changed. Reload before uploading.")
 		}
 		if len(old.Images) >= 5 {
 			return bad("Maximum five screenshots per product")
@@ -135,7 +135,7 @@ func (s *Server) deleteImage(w http.ResponseWriter, r *http.Request) error {
 			return missing()
 		}
 		if old.Version != req.Version {
-			return conflict("This product has changed. Reload before deleting.")
+			return versionConflict("This product has changed. Reload before deleting.")
 		}
 		p = old
 		imgs := []model.Image{}

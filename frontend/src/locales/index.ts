@@ -1,5 +1,18 @@
 import { createI18n } from 'vue-i18n'
 const entries: Record<string, [string, string, string]> = {
+ researchProduct: ['Product / SKU', 'Produk / SKU', '产品 / SKU'],
+ addProduct: ['Add product', 'Tambah produk', '添加产品'],
+ draftResearchHint: ['Switch products to edit their inputs and review their analysis. Each product keeps its own values, competitors, and screenshots.', 'Pilih produk untuk mengedit data dan meninjau analisis. Setiap produk menyimpan nilai, pesaing, dan screenshot masing-masing.', '切换产品以编辑输入并查看分析。每个产品保留独立的数据、竞品和截图。'],
+ importDraftHint: ['Add selected rows to the research form. You can edit each product before saving its evaluation.', 'Tambahkan baris terpilih ke formulir riset. Anda dapat mengedit setiap produk sebelum menyimpan evaluasinya.', '将所选行添加到研究表单，可在保存测算前编辑每个产品。'],
+ addToResearch: ['Add to research', 'Tambahkan ke riset', '添加到研究'],
+ chooseEvaluations: ['Choose evaluations to save', 'Pilih evaluasi untuk disimpan', '选择要保存的测算'],
+ selectDraftHint: ['Select the products to save as separate evaluations. Unselected products stay in this form.', 'Pilih produk untuk disimpan sebagai evaluasi terpisah. Produk yang tidak dipilih tetap ada dalam formulir ini.', '选择要保存为独立测算的产品。未选产品将保留在表单中。'],
+ unsavedDraft: ['Unsaved', 'Belum disimpan', '未保存'],
+ duplicateDraftSKU: ['Selected products must have different SKUs.', 'Produk terpilih harus memiliki SKU yang berbeda.', '所选产品必须使用不同的 SKU。'],
+ bulkResearch: ['Bulk import', 'Impor massal', '批量导入'],
+ bulkResearchHint: ['Import products into the same research form, edit their values, then choose which evaluations to save.', 'Impor beberapa produk, bandingkan analisisnya, lalu simpan evaluasi pilihan Anda.', '导入多个产品，比较分析结果，然后保存所选测算。'],
+ saveSelectedEvaluations: ['Save selected evaluations', 'Simpan evaluasi terpilih', '保存所选测算'],
+ noValidImportRows: ['No valid products to analyze. Correct the workbook or column mapping and preview again.', 'Tidak ada produk valid untuk dianalisis. Perbaiki buku kerja atau pemetaan kolom, lalu pratinjau lagi.', '没有可分析的有效产品。请修正工作簿或列映射后重新预览。'],
  brand: ['Genco', 'Genco', 'Genco'], workspace: ['Product profitability', 'Profitabilitas produk', '产品盈利能力'], workspaceLabel: ['SHARED WORKSPACE', 'RUANG KERJA BERSAMA', '共享工作空间'],
  products: ['Evaluations', 'Evaluasi', '测算列表'], calculator: ['Calculator', 'Kalkulator', '计算器'], research: ['Product research', 'Riset produk', '产品研究'], imports: ['Excel import', 'Impor Excel', 'Excel 导入'], settings: ['Shared settings', 'Pengaturan bersama', '共享设置'],
  pageTitle: ['Your next great product starts here.', 'Produk hebat berikutnya dimulai di sini.', '从这里发现下一款好产品。'], pageSub: ['Research the market. Know your margins. Make the next move with confidence.', 'Riset pasar. Pahami margin. Tentukan langkah berikutnya dengan yakin.', '研究市场，了解利润，做出有据可依的决策。'],

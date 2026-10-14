@@ -1,7 +1,7 @@
-export class ApiError extends Error { constructor(public status: number, message: string, public fields: Record<string, string> = {}) { super(message) } }
+export class ApiError extends Error { constructor(public status: number, message: string, public fields: Record<string, string> = {}, public code = '') { super(message) } }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
  const response = await fetch(`/api/v1${path}`, { ...options, headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...options.headers } })
- if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText })); throw new ApiError(response.status, error.message, error.fields || {}) }
+ if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText })); throw new ApiError(response.status, error.message, error.fields || {}, error.code || '') }
  return response.json()
 }
 export const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) })

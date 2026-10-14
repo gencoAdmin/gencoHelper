@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -60,6 +61,74 @@ func decodeAs[T any](t *testing.T, b []byte) T {
 	}
 	return v
 }
+
+func TestSaveValidationCanBeCorrectedWithoutReload(t *testing.T) {
+	s, h := testServer(t)
+	input := in()
+	input.Name = ""
+	request(t, h, "POST", "/products", SaveRequest{Input: input}, 422)
+	if len(s.Store.Read().Products) != 0 {
+		t.Fatal("invalid save created a product")
+	}
+	input.Name = "Corrected product"
+	p := decodeAs[model.Product](t, request(t, h, "POST", "/products", SaveRequest{Input: input}, 201))
+	for _, field := range []string{"name", "competitors"} {
+		t.Run(field, func(t *testing.T) {
+			req := SaveRequest{Version: p.Version, Input: p.Input}
+			if field == "name" {
+				req.Input.Name = ""
+			} else {
+				req.Competitors = []model.Competitor{{Platform: "Shopee", Price: "50000", Sales: "10", Rating: "4"}}
+			}
+			request(t, h, "PUT", "/products/"+p.ID, req, 422)
+			unchanged := decodeAs[model.Product](t, request(t, h, "GET", "/products/"+p.ID, nil, 200))
+			if !reflect.DeepEqual(p, unchanged) {
+				t.Fatal("validation failure changed the saved product")
+			}
+			req.Input.Name = "Fixed " + field
+			if len(req.Competitors) > 0 {
+				req.Competitors[0].Shop = "Corrected shop"
+			}
+			p = decodeAs[model.Product](t, request(t, h, "PUT", "/products/"+p.ID, req, 200))
+			if p.Version != req.Version+1 {
+				t.Fatal("corrected save did not advance exactly one version")
+			}
+		})
+	}
+}
+
+func TestDuplicateSKUAndStaleVersionHaveDistinctErrors(t *testing.T) {
+	_, h := testServer(t)
+	type errorResponse struct {
+		Code   string            `json:"code"`
+		Fields map[string]string `json:"fields"`
+	}
+	req := SaveRequest{Input: in()}
+	p := decodeAs[model.Product](t, request(t, h, "POST", "/products", req, 201))
+	duplicate := decodeAs[errorResponse](t, request(t, h, "POST", "/products", req, 409))
+	if duplicate.Code != "duplicate_sku" || duplicate.Fields["sku"] == "" {
+		t.Fatalf("duplicate SKU must identify the field: %+v", duplicate)
+	}
+	req.Input.SKU = "SECOND"
+	second := decodeAs[model.Product](t, request(t, h, "POST", "/products", req, 201))
+	req.Version = second.Version
+	req.Input.SKU = p.Input.SKU
+	duplicate = decodeAs[errorResponse](t, request(t, h, "PUT", "/products/"+second.ID, req, 409))
+	if duplicate.Code != "duplicate_sku" || duplicate.Fields["sku"] == "" {
+		t.Fatalf("duplicate SKU on edit must identify the field: %+v", duplicate)
+	}
+	req.Input.SKU = "CORRECTED"
+	updated := decodeAs[model.Product](t, request(t, h, "PUT", "/products/"+second.ID, req, 200))
+	stale := decodeAs[errorResponse](t, request(t, h, "PUT", "/products/"+second.ID, req, 409))
+	if stale.Code != "version_conflict" || len(stale.Fields) != 0 {
+		t.Fatalf("stale version must require reloading: %+v", stale)
+	}
+	unchanged := decodeAs[model.Product](t, request(t, h, "GET", "/products/"+second.ID, nil, 200))
+	if !reflect.DeepEqual(updated, unchanged) {
+		t.Fatal("stale save overwrote the latest product")
+	}
+}
+
 func TestProductsRevisionsConcurrencyAndPersistence(t *testing.T) {
 	s, h := testServer(t)
 	req := SaveRequest{Input: in()}
@@ -120,6 +189,26 @@ func TestImportIdempotenceExportFrozenAndRestartRecovery(t *testing.T) {
 	if len(s.Store.Read().Products) != 0 || len(p.Rows) != 5 || p.Rows[0].Input.SKU != "00007" || len(p.Rows[1].Errors) == 0 || len(p.Rows[2].Errors) == 0 || len(p.Rows[3].Errors) == 0 {
 		t.Fatalf("preview %+v", p)
 	}
+	for _, row := range p.Rows {
+		if len(row.Errors) > 0 {
+			if row.Evaluation != nil {
+				t.Fatal("invalid rows must not include analysis")
+			}
+			continue
+		}
+		if row.Evaluation == nil || len(row.Evaluation.Results) != len(model.Channels) {
+			t.Fatal("valid import rows must include every channel's analysis")
+		}
+		calculated := decodeAs[model.Evaluation](t, request(t, h, "POST", "/calculate", row.Input, 200))
+		if !reflect.DeepEqual(row.Evaluation.Results, calculated.Results) || row.Evaluation.Recommended != calculated.Recommended {
+			t.Fatal("bulk research must use the same analysis as single-product research")
+		}
+	}
+	// A shared preset edit between reviewing and saving must not change the
+	// imported evaluation. The snapshot must also survive a restart.
+	settings := s.Store.Read().Settings[0]
+	settings.Channels["shelf"]["commission"] = "90"
+	request(t, h, "PUT", "/settings", settings, 200)
 	commit := map[string]any{"previewId": p.ID, "rows": []int{2, 6}}
 	j := decodeAs[model.Job](t, request(t, h, "POST", "/imports/commit", commit, 202))
 	j2 := decodeAs[model.Job](t, request(t, h, "POST", "/imports/commit", commit, 202))
@@ -145,6 +234,9 @@ func TestImportIdempotenceExportFrozenAndRestartRecovery(t *testing.T) {
 	}
 	if product.Latest().Results[0].ContributionPerOrder != "8000" {
 		t.Fatal("import defaults not applied")
+	}
+	if !reflect.DeepEqual(product.Latest().Results, p.Rows[0].Evaluation.Results) || product.Latest().PresetVersion != p.Rows[0].Evaluation.PresetVersion {
+		t.Fatal("saved import changed the reviewed analysis after settings edit and restart")
 	}
 	exp := decodeAs[model.Job](t, request(t, h, "POST", "/exports", map[string]any{"ids": []string{product.ID}, "format": "xlsx", "locale": "zh"}, 202))
 	latest := product.Latest().ID

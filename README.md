@@ -55,11 +55,11 @@ The agent execution environment prevents network sockets and Chromium from start
 ## Included workflows
 
 - Search, filter, sort, select, duplicate, archive, restore, and export saved evaluations.
-- Unsaved calculator and guided basic information → research → results/save flow.
+- One editable research form for manual and imported products. Add products or import Excel rows, switch product/SKU in the dropdown, edit independent financial inputs and market evidence, and choose which evaluations to save.
 - Five editable channel presets, category returns, individual overrides, saved assumptions, revision history, optimistic concurrency, and explicit recalculation.
 - Up to eight competitors, market summaries and explicit price-range adoption; up to five shared normalized screenshots with thumbnails and full previews.
 - English, Indonesian, and Simplified Chinese, with English as the initial language.
-- Excel template/upload/worksheet mapping/preview/selection; validation, formula rejection, duplicate and leading-zero SKUs, idempotent imports, durable jobs and restart recovery.
+- Excel template/upload/worksheet mapping/preview/selection loads selected rows as editable research drafts. The legacy import URL opens this workflow in Product research. The import API also supports idempotent commits, durable jobs, and restart recovery.
 - Combined Excel reports with all five planned sheets and protected summary CSV exports. Selections and saved revisions are frozen at export creation. Temporary workbooks, previews, and reports expire after 24 hours.
 - MySQL migrations, runtime/migration/backup credentials, systemd/Nginx configuration, and backup/rollback/restore instructions.
 

@@ -38,7 +38,13 @@ type APIError struct {
 func (e *APIError) Error() string { return e.Message }
 func bad(msg string) error        { return &APIError{Status: 400, Code: "invalid_request", Message: msg} }
 func conflict(msg string) error   { return &APIError{Status: 409, Code: "conflict", Message: msg} }
-func missing() error              { return &APIError{Status: 404, Code: "not_found", Message: "Record not found"} }
+func versionConflict(msg string) error {
+	return &APIError{Status: 409, Code: "version_conflict", Message: msg}
+}
+func duplicateSKU(msg string) error {
+	return &APIError{Status: 409, Code: "duplicate_sku", Message: msg, Fields: map[string]string{"sku": msg}}
+}
+func missing() error { return &APIError{Status: 404, Code: "not_found", Message: "Record not found"} }
 func respond(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -164,7 +170,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) error {
 	}
 	err := s.Store.Change(r.Context(), func(st *model.State) error {
 		if current(*st).Version != input.Version {
-			return conflict("Settings have changed. Reload before saving.")
+			return versionConflict("Settings have changed. Reload before saving.")
 		}
 		input.Version++
 		input.UpdatedAt = time.Now().UTC()
@@ -362,7 +368,7 @@ func create(st *model.State, in model.Input, cs []model.Competitor) (model.Produ
 	in.SKU = strings.TrimSpace(in.SKU)
 	for _, p := range st.Products {
 		if in.SKU != "" && p.Input.SKU == in.SKU {
-			return model.Product{}, conflict("This SKU already exists, including archived products.")
+			return model.Product{}, duplicateSKU("This SKU already exists, including archived products.")
 		}
 	}
 	now := time.Now().UTC()
@@ -410,11 +416,11 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) error {
 			return missing()
 		}
 		if old.Version != req.Version {
-			return conflict("This product has changed. Reload before saving.")
+			return versionConflict("This product has changed. Reload before saving.")
 		}
 		for id, other := range st.Products {
 			if id != old.ID && req.Input.SKU != "" && other.Input.SKU == req.Input.SKU {
-				return conflict("This SKU already exists.")
+				return duplicateSKU("This SKU already exists.")
 			}
 		}
 		p = old
@@ -462,7 +468,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) error {
 			return missing()
 		}
 		if old.Version != req.Version {
-			return conflict("This product has changed. Reload before continuing.")
+			return versionConflict("This product has changed. Reload before continuing.")
 		}
 		p = old
 		switch r.PathValue("action") {
@@ -577,6 +583,12 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) error {
 	rows, err := workbook.Preview(path, req.Sheet, req.Mapping, current(st), st.Products)
 	if err != nil {
 		return bad(err.Error())
+	}
+	for i := range rows {
+		if len(rows[i].Errors) == 0 {
+			ev := finance.Evaluate(rows[i].Input, current(st))
+			rows[i].Evaluation = &ev
+		}
 	}
 	p := model.Preview{ID: store.ID(), Rows: rows, CreatedAt: time.Now().UTC()}
 	if err = s.Store.Change(r.Context(), func(st *model.State) error { st.Previews[p.ID] = p; return nil }); err != nil {
@@ -769,10 +781,19 @@ func (s *Server) runJob(ctx context.Context, id string) {
 				if e := finance.Validate(row.Input, true, current(*st).Categories); len(e) > 0 {
 					j.Failed++
 					j.Errors = append(j.Errors, fmt.Sprintf("Row %d: invalid inputs", row.Row))
-				} else if _, err := create(st, row.Input, nil); err != nil {
+				} else if p, err := create(st, row.Input, nil); err != nil {
 					j.Skipped++
 					j.Errors = append(j.Errors, fmt.Sprintf("Row %d: %s", row.Row, err.Error()))
 				} else {
+					// Keep the analysis reviewed in the preview, even if shared
+					// settings changed before saving. Older jobs have no snapshot.
+					if row.Evaluation != nil {
+						ev := *row.Evaluation
+						ev.ID = p.Latest().ID
+						ev.CreatedAt = p.Latest().CreatedAt
+						p.Revisions = []model.Evaluation{ev}
+						st.Products[p.ID] = p
+					}
 					j.Created++
 				}
 				j.Processed++

@@ -179,9 +179,10 @@ type Product struct {
 func (p Product) Latest() Evaluation { return p.Revisions[len(p.Revisions)-1] }
 
 type ImportRow struct {
-	Row    int      `json:"row"`
-	Input  Input    `json:"input"`
-	Errors []string `json:"errors"`
+	Row        int         `json:"row"`
+	Input      Input       `json:"input"`
+	Errors     []string    `json:"errors"`
+	Evaluation *Evaluation `json:"evaluation,omitempty"`
 }
 type Preview struct {
 	ID        string      `json:"id"`

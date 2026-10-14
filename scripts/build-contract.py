@@ -41,7 +41,7 @@ schemas = {
         "evaluation": ref("EvaluationRevision"), "headline": ref("ChannelResult"), "imageCount": integer, "competitorCount": integer}),
     "SaveRequest": obj({"version": integer, "input": ref("CalculationInput"), "competitors": array(ref("Competitor"))}, ["version", "competitors"]),
     "VersionRequest": obj({"version": integer}),
-    "ImportRow": obj({"row": integer, "input": ref("CalculationInput"), "errors": array(string)}),
+    "ImportRow": obj({"row": integer, "input": ref("CalculationInput"), "errors": array(string), "evaluation": ref("EvaluationRevision")}, ["evaluation"]),
     "Preview": obj({"id": string, "rows": array(ref("ImportRow")), "createdAt": date, "jobId": string}),
     "ImportUpload": obj({"id": string, "sheets": array(obj({"name": string, "headers": array(string), "rowCount": integer})), "mapping": {"type": "object", "additionalProperties": integer}}),
     "PreviewRequest": obj({"uploadId": string, "sheet": string, "mapping": {"type": "object", "additionalProperties": integer}}),
@@ -83,8 +83,8 @@ operation("/products/{id}/images/{image}","delete","deleteProductImage",ref("Pro
 operation("/images/{image}","get","getImage",binary=True,description="Use image ID or image ID with -thumb suffix.")
 operation("/imports/template","get","downloadImportTemplate",binary=True,params=[query("locale")])
 operation("/imports/upload","post","uploadWorkbook",ref("ImportUpload"),obj({"file": {"type":"string","format":"binary"}}),201,multipart=True,description=".xlsx up to 10 MB, 5,000 data rows per sheet, 20 sheets, 200 columns, 64 MB uncompressed. Expires in 24 hours.")
-operation("/imports/preview","post","previewImport",ref("Preview"),ref("PreviewRequest"),description="Zero-based source-column indices. Creates no products; formulas and duplicate SKUs are rejected. Source row numbers include the header.")
-operation("/imports/commit","post","commitImport",ref("JobStatus"),ref("CommitRequest"),202,description="Select valid source row numbers. Idempotent by preview ID. Worker rechecks SKU uniqueness and checkpoints each committed row.")
+operation("/imports/preview","post","previewImport",ref("Preview"),ref("PreviewRequest"),description="Zero-based source-column indices. Creates no products; formulas and duplicate SKUs are rejected. Valid rows include the same five-channel analysis as /calculate. Source row numbers include the header.")
+operation("/imports/commit","post","commitImport",ref("JobStatus"),ref("CommitRequest"),202,description="Select valid source row numbers. Saves the reviewed preview analysis as individual evaluations. Idempotent by preview ID. Worker rechecks SKU uniqueness and checkpoints each committed row.")
 operation("/exports","post","createExport",ref("JobStatus"),ref("ExportRequest"),202,description="Explicit IDs or all matching filters. Freezes products and latest saved revisions; never recalculates. Reports expire after 24 hours.")
 operation("/jobs/{id}","get","getJobStatus",ref("JobStatus"))
 operation("/jobs/{id}/download","get","downloadJobReport",binary=True)

@@ -1663,7 +1663,7 @@
       "post": {
         "operationId": "previewImport",
         "summary": "previewImport",
-        "description": "Zero-based source-column indices. Creates no products; formulas and duplicate SKUs are rejected. Source row numbers include the header.",
+        "description": "Zero-based source-column indices. Creates no products; formulas and duplicate SKUs are rejected. Valid rows include the same five-channel analysis as /calculate. Source row numbers include the header.",
         "parameters": [],
         "responses": {
           "200": {
@@ -1743,7 +1743,7 @@
       "post": {
         "operationId": "commitImport",
         "summary": "commitImport",
-        "description": "Select valid source row numbers. Idempotent by preview ID. Worker rechecks SKU uniqueness and checkpoints each committed row.",
+        "description": "Select valid source row numbers. Saves the reviewed preview analysis as individual evaluations. Idempotent by preview ID. Worker rechecks SKU uniqueness and checkpoints each committed row.",
         "parameters": [],
         "responses": {
           "202": {
@@ -2856,6 +2856,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "evaluation": {
+            "$ref": "#/components/schemas/EvaluationRevision"
           }
         },
         "required": [

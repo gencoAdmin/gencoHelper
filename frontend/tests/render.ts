@@ -1,30 +1,87 @@
 import assert from 'node:assert/strict'
-import { createSSRApp, createRenderer, h, ref, nextTick } from 'vue'
+import { createSSRApp, createRenderer, h, ref, nextTick, watch } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import App from '../src/App.vue'
 import Products from '../src/pages/Products.vue'
 import Calculator from '../src/pages/Calculator.vue'
-import Import from '../src/pages/Import.vue'
 import Settings from '../src/pages/Settings.vue'
 import Results from '../src/components/Results.vue'
 import { i18n } from '../src/locales'
 import { useApp } from '../src/stores/app'
 import { emptyInput, type EvaluationRevision, type ChannelResult } from '../src/types'
-import { canonicalJSON } from '../src/api'
+import { api, ApiError, canonicalJSON } from '../src/api'
 import { marketSummary, validPrice, researchLink } from '../src/lib/research'
 import ResearchInsights from '../src/components/ResearchInsights.vue'
+import { useResearchDrafts } from '../src/lib/researchDrafts'
 
 const expected: Record<string,string[]> = {
- en: ['Your next great product starts here.', 'Research the market. Test the profit.', 'Research the market. Test the profit.', 'From spreadsheet to insight.', 'Better assumptions. Better decisions.'],
- id: ['Produk hebat berikutnya dimulai di sini.', 'Riset pasar. Uji laba.', 'Riset pasar. Uji laba.', 'Dari spreadsheet ke wawasan.', 'Asumsi lebih baik. Keputusan lebih baik.'],
- zh: ['从这里发现下一款好产品。', '研究市场，测试利润。', '研究市场，测试利润。', '从表格到洞察。', '更好的假设，更好的决策。'],
+ en: ['Your next great product starts here.', 'Research the market. Test the profit.', 'Research the market. Test the profit.', 'Research the market. Test the profit.', 'Better assumptions. Better decisions.'],
+ id: ['Produk hebat berikutnya dimulai di sini.', 'Riset pasar. Uji laba.', 'Riset pasar. Uji laba.', 'Riset pasar. Uji laba.', 'Asumsi lebih baik. Keputusan lebih baik.'],
+ zh: ['从这里发现下一款好产品。', '研究市场，测试利润。', '研究市场，测试利润。', '研究市场，测试利润。', '更好的假设，更好的决策。'],
 }
 const m = { status: 'ok', value: '10' } as const
 const result: ChannelResult = { channel:'shelf',rates:{},sources:{},price:'50000',successfulSales:'1000',revenue:'50000000',shippingIncome:'0',contribution:'8000000',contributionPerOrder:'8000',profitPerOrder:'2700',monthlyProfit:'2700000',margin:'5.4',breakEvenOrders:{status:'ok',value:'663'},breakEvenPrice:{status:'ok',value:'46448'},maxSupplierCost:m,priceBuffer:m,maxAdvertising:m,breakEvenROAS:m,targetPrice:m,targetCost:m,verdict:'thin',reason:'thin',breakdown:[],volume:[] }
 const evaluation: EvaluationRevision = { id:'fixture',input:emptyInput(),presetVersion:1,calculationVersion:'1.0.0',results:[result],recommended:'shelf',createdAt:'2026-10-12T00:00:00Z' }
 export async function run(DecimalInput: any) {
+ const drafts = useResearchDrafts()
+ const stopDraftWatch = watch(() => drafts.active.value.input, () => { assert.ok(drafts.active.value.input,'Import replacement must never expose an empty active form to synchronous watchers') }, {flush:'sync'})
+ drafts.initializeMargin('20')
+ drafts.importRows([{row:2,input:{...emptyInput(),name:'Imported shirt',sku:'00007',price:'65000'},errors:[],evaluation}])
+ assert.equal(drafts.drafts.value.length,1,'Import should replace an untouched placeholder even with a custom shared margin')
+ const shirtId = drafts.activeId.value
+ drafts.active.value.input.price='72000'
+ drafts.active.value.competitors.push({id:'',platform:'Marketplace',shop:'Shirt shop',price:'75000',sales:'10',rating:'5',url:''})
+ drafts.active.value.removedImages.push('shirt-image')
+ drafts.active.value.files.push({file:{} as File,url:'shirt-file'})
+ drafts.add('20')
+ const manualId = drafts.activeId.value
+ drafts.active.value.input.name='Manual lamp'
+ drafts.active.value.input.price='90000'
+ assert.equal(drafts.active.value.competitors.length,0)
+ assert.equal(drafts.active.value.files.length,0)
+ assert.equal(drafts.active.value.removedImages.length,0)
+ drafts.activeId.value=shirtId
+ assert.equal(drafts.active.value.input.price,'72000')
+ assert.equal(drafts.active.value.competitors[0].shop,'Shirt shop')
+ assert.equal(drafts.active.value.files[0].url,'shirt-file')
+ assert.equal(drafts.active.value.removedImages[0],'shirt-image')
+ drafts.activeId.value=manualId
+ assert.equal(drafts.active.value.input.price,'90000')
+ drafts.importRows([{row:3,input:{...emptyInput(),name:'Imported stool'},errors:[]}])
+ assert.equal(drafts.drafts.value.length,3,'Import must preserve existing manual and imported drafts')
+ assert.equal(drafts.drafts.value[0].input.sku,'00007','Leading-zero SKUs must survive draft switching')
+ const changedPlaceholder = useResearchDrafts()
+ changedPlaceholder.active.value.input.cost='40000'
+ changedPlaceholder.importRows([{row:2,input:{...emptyInput(),name:'Imported item'},errors:[]}])
+ assert.equal(changedPlaceholder.drafts.value.length,2,'Import must not discard financial edits to an unnamed draft')
+ const emptyImport = useResearchDrafts(); emptyImport.importRows([])
+ assert.equal(emptyImport.drafts.value.length,1,'Empty imports must keep a valid active form')
+ stopDraftWatch()
+ const appStore = useApp(createPinia())
+ const originalFetch = globalThis.fetch
+ try {
+  for (const code of ['version_conflict', 'duplicate_sku', 'conflict']) {
+   globalThis.fetch = async () => new Response(JSON.stringify({code, message:'Save failed', fields: code === 'duplicate_sku' ? {sku:'This SKU already exists.'} : {}}), {status:409})
+   await assert.rejects(api('/products'), (error: unknown) => {
+    assert.ok(error instanceof ApiError)
+    assert.equal(error.code,code)
+    appStore.report(error)
+    assert.equal(appStore.conflict,code === 'version_conflict','Only a stale version should ask the user to reload')
+    assert.deepEqual(appStore.fields,code === 'duplicate_sku' ? {sku:'This SKU already exists.'} : {})
+    return true
+   })
+  }
+ } finally { globalThis.fetch = originalFetch }
+ appStore.report(new ApiError(409,'Stale record',{sku:'Old field error'},'version_conflict'))
+ appStore.report(new Error('Product name is required'))
+ assert.equal(appStore.error,'Product name is required')
+ assert.equal(appStore.conflict,false,'Local validation must clear a previous stale-version error')
+ assert.deepEqual(appStore.fields,{})
+ appStore.report(new ApiError(422,'Please check the highlighted fields',{name:'Required'},'validation'))
+ assert.equal(appStore.conflict,false)
+ assert.deepEqual(appStore.fields,{name:'Required'})
  const competitor = (price: string) => ({ id:'', shop:'Test shop', platform:'Shopee', price, sales:'50', rating:'4.8', url:'' })
  const summary = marketSummary(['0','bad','50000.00000001','70000.00000002'].map(competitor))
  assert.equal(summary.count,2)
@@ -62,7 +119,7 @@ export async function run(DecimalInput: any) {
  for (const lang of ['en','id','zh']) {
   i18n.global.locale.value = lang
   for (const [index,path] of ['/','/calculator','/research','/import','/settings'].entries()) {
-   const router = createRouter({ history:createMemoryHistory(),routes:[{path:'/',component:Products},{path:'/calculator',redirect:'/research'},{path:'/research',component:Calculator},{path:'/import',component:Import},{path:'/settings',component:Settings}] })
+   const router = createRouter({ history:createMemoryHistory(),routes:[{path:'/',component:Products},{path:'/calculator',redirect:'/research'},{path:'/research',component:Calculator},{path:'/import',redirect:'/research?mode=bulk'},{path:'/settings',component:Settings}] })
    await router.push(path); await router.isReady()
    const pinia=createPinia();const app=createSSRApp(App).use(pinia).use(router).use(i18n);useApp(pinia).settings={version:1,channels:{},categories:['general'],categoryReturns:{general:''},targetMargin:'15',healthyMargin:'15',healthyBuffer:'10',viableMargin:'8',updatedAt:''}
    const html=await renderToString(app);assert.ok(html.includes(expected[lang][index]),`${lang} ${path}: missing page title`);assert.ok(!html.includes('undefined'),`${lang} ${path}: undefined text`); assert.ok(!html.includes('to="/calculator"'), 'Navigation must use the unified workspace')
@@ -71,5 +128,5 @@ export async function run(DecimalInput: any) {
   assert.ok(html.includes('Rp 2,700,000'),`${lang}: result profit missing`)
   assert.ok(html.includes('663'),`${lang}: break-even orders missing`)
  }
- console.log('Passed: exact decimal input event handling, 15 page renders across all three languages, financial result rendering, exact market summaries, safe research links, and market decision guidance.')
+ console.log('Passed: independent research drafts, imported and manual edits, leading-zero SKUs, competitor and image isolation, exact decimal input event handling, 15 page renders across all three languages, financial result rendering, exact market summaries, safe research links, and market decision guidance.')
 }
