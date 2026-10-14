@@ -21,8 +21,19 @@ import (
 	"time"
 )
 
+// BlobStore is the object-storage surface the API needs. It is satisfied by
+// *gcs.Store in production and by a local-disk fake in tests.
+type BlobStore interface {
+	Upload(ctx context.Context, name string, r io.Reader, contentType string) error
+	Open(ctx context.Context, name string) (io.ReadCloser, string, error)
+	Download(ctx context.Context, name, path string, perm os.FileMode) error
+	Created(ctx context.Context, name string) (time.Time, error)
+	Delete(ctx context.Context, name string) error
+}
+
 type Server struct {
 	Store    *store.Store
+	Blobs    BlobStore
 	Dir      string
 	BaseURL  string
 	Frontend string
@@ -529,24 +540,30 @@ func (s *Server) uploadWorkbook(w http.ResponseWriter, r *http.Request) error {
 		return bad("Choose an .xlsx workbook up to 10 MB")
 	}
 	id := store.ID()
-	path := workbook.UploadPath(s.Dir, id)
-	if err = os.MkdirAll(filepath.Dir(path), 0750); err != nil {
-		return err
-	}
-	dest, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	// The Excel reader needs a real file, so stage the upload in a temp file,
+	// inspect it, then push it to GCS for the later preview step.
+	tmp, err := os.CreateTemp("", "genco-upload-*.xlsx")
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(dest, f)
-	ce := dest.Close()
+	path := tmp.Name()
+	defer os.Remove(path)
+	_, err = io.Copy(tmp, f)
+	ce := tmp.Close()
 	if err != nil || ce != nil {
-		_ = os.Remove(path)
 		return errors.Join(err, ce)
 	}
 	u, err := workbook.Inspect(path, id)
 	if err != nil {
-		_ = os.Remove(path)
 		return bad(err.Error())
+	}
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	if err = s.Blobs.Upload(r.Context(), workbook.UploadKey(id), src, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+		return err
 	}
 	respond(w, 201, u)
 	return nil
@@ -574,11 +591,22 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) error {
 	if !validID(req.UploadID) {
 		return bad("Invalid upload ID")
 	}
-	path := workbook.UploadPath(s.Dir, req.UploadID)
-	info, err := os.Stat(path)
-	if err != nil || time.Since(info.ModTime()) > 24*time.Hour {
+	key := workbook.UploadKey(req.UploadID)
+	created, err := s.Blobs.Created(r.Context(), key)
+	if err != nil || time.Since(created) > 24*time.Hour {
 		return bad("Upload expired. Upload the file again.")
 	}
+	tmp, err := os.CreateTemp("", "genco-preview-*.xlsx")
+	if err != nil {
+		return err
+	}
+	path := tmp.Name()
+	_ = tmp.Close()
+	_ = os.Remove(path)
+	if err = s.Blobs.Download(r.Context(), key, path, 0600); err != nil {
+		return bad("Upload expired. Upload the file again.")
+	}
+	defer os.Remove(path)
 	st := s.Store.Read()
 	rows, err := workbook.Preview(path, req.Sheet, req.Mapping, current(st), st.Products)
 	if err != nil {
@@ -867,13 +895,14 @@ func (s *Server) cleanup(ctx context.Context) {
 			return nil
 		})
 	}
-	for _, sub := range []string{"uploads", "reports"} {
-		entries, _ := os.ReadDir(filepath.Join(s.Dir, sub))
-		for _, e := range entries {
-			info, err := e.Info()
-			if err == nil && !e.IsDir() && time.Since(info.ModTime()) > 24*time.Hour {
-				_ = os.Remove(filepath.Join(s.Dir, sub, e.Name()))
-			}
+	// Reports are server-generated artifacts still kept on local disk; staged
+	// import workbooks now live in blob storage and are removed on commit (a
+	// bucket lifecycle rule on the uploads/ prefix handles abandoned uploads).
+	entries, _ := os.ReadDir(filepath.Join(s.Dir, "reports"))
+	for _, e := range entries {
+		info, err := e.Info()
+		if err == nil && !e.IsDir() && time.Since(info.ModTime()) > 24*time.Hour {
+			_ = os.Remove(filepath.Join(s.Dir, "reports", e.Name()))
 		}
 	}
 }

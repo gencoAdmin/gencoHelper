@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"errors"
+	"genco/finance/internal/gcs"
 	"genco/finance/internal/model"
 	"genco/finance/internal/store"
 	"golang.org/x/image/draw"
@@ -11,8 +13,6 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -74,23 +74,14 @@ func (s *Server) uploadImage(w http.ResponseWriter, r *http.Request) error {
 		return bad("Image could not be decoded")
 	}
 	id := store.ID()
-	dir := filepath.Join(s.Dir, "images")
-	if err = os.MkdirAll(dir, 0750); err != nil {
-		return err
-	}
 	for name, img := range map[string]image.Image{id: resize(src, 2400), id + "-thumb": resize(src, 320)} {
-		path := filepath.Join(dir, name+".jpg")
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
-		if err != nil {
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 88}); err != nil {
 			return err
 		}
-		err = jpeg.Encode(f, img, &jpeg.Options{Quality: 88})
-		ce := f.Close()
-		if err != nil {
+		if err := s.Blobs.Upload(r.Context(), "images/"+name+".jpg", &buf, "image/jpeg"); err != nil {
+			_ = s.Blobs.Delete(r.Context(), "images/"+id+".jpg")
 			return err
-		}
-		if ce != nil {
-			return ce
 		}
 	}
 	var p model.Product
@@ -113,8 +104,8 @@ func (s *Server) uploadImage(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	})
 	if err != nil {
-		_ = os.Remove(filepath.Join(dir, id+".jpg"))
-		_ = os.Remove(filepath.Join(dir, id+"-thumb.jpg"))
+		_ = s.Blobs.Delete(r.Context(), "images/"+id+".jpg")
+		_ = s.Blobs.Delete(r.Context(), "images/"+id+"-thumb.jpg")
 		return err
 	}
 	respond(w, 201, p)
@@ -160,7 +151,7 @@ func (s *Server) deleteImage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	for _, name := range []string{id, id + "-thumb"} {
-		_ = os.Remove(filepath.Join(s.Dir, "images", name+".jpg"))
+		_ = s.Blobs.Delete(r.Context(), "images/"+name+".jpg")
 	}
 	respond(w, 200, p)
 	return nil
@@ -182,12 +173,19 @@ func (s *Server) serveImage(w http.ResponseWriter, r *http.Request) error {
 	if !found {
 		return missing()
 	}
-	path := filepath.Join(s.Dir, "images", name+".jpg")
-	if _, err := os.Stat(path); err != nil {
-		return missing()
+	rc, ct, err := s.Blobs.Open(r.Context(), "images/"+name+".jpg")
+	if err != nil {
+		if errors.Is(err, gcs.ErrNotExist) {
+			return missing()
+		}
+		return err
 	}
-	w.Header().Set("Content-Type", "image/jpeg")
+	defer rc.Close()
+	if ct == "" {
+		ct = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	http.ServeFile(w, r, path)
+	_, _ = io.Copy(w, rc)
 	return nil
 }

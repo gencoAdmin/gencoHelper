@@ -10,7 +10,6 @@ import (
 	"github.com/xuri/excelize/v2"
 	"io"
 	"math/big"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -445,7 +444,8 @@ func Export(w io.Writer, products []model.Product, format, locale, base string) 
 	_, err := f.WriteTo(w)
 	return err
 }
-func UploadPath(dir, id string) string { return filepath.Join(dir, "uploads", id+".xlsx") }
+// UploadKey is the object key for a staged import workbook in blob storage.
+func UploadKey(id string) string { return "uploads/" + id + ".xlsx" }
 func DecimalCompare(a, b string) int {
 	x, _ := new(big.Rat).SetString(a)
 	y, _ := new(big.Rat).SetString(b)

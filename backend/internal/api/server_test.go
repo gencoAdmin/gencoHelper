@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"genco/finance/internal/gcs"
 	"genco/finance/internal/model"
 	"genco/finance/internal/store"
 	"genco/finance/internal/workbook"
@@ -20,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testServer(t *testing.T) (*Server, http.Handler) {
@@ -30,8 +33,62 @@ func testServer(t *testing.T) (*Server, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	s := &Server{Store: db, Dir: dir, BaseURL: "https://finance.example.com", Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	s := &Server{Store: db, Blobs: &diskBlobs{dir: t.TempDir()}, Dir: dir, BaseURL: "https://finance.example.com", Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	return s, s.Handler()
+}
+
+// diskBlobs is a local-filesystem BlobStore for tests, standing in for GCS.
+type diskBlobs struct{ dir string }
+
+func (d *diskBlobs) path(name string) string { return filepath.Join(d.dir, filepath.FromSlash(name)) }
+func (d *diskBlobs) Upload(_ context.Context, name string, r io.Reader, _ string) error {
+	p := d.path(name)
+	if err := os.MkdirAll(filepath.Dir(p), 0750); err != nil {
+		return err
+	}
+	f, err := os.Create(p)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(f, r)
+	return errors.Join(err, f.Close())
+}
+func (d *diskBlobs) Open(_ context.Context, name string) (io.ReadCloser, string, error) {
+	f, err := os.Open(d.path(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", gcs.ErrNotExist
+		}
+		return nil, "", err
+	}
+	return f, "image/jpeg", nil
+}
+func (d *diskBlobs) Download(_ context.Context, name, path string, perm os.FileMode) error {
+	b, err := os.ReadFile(d.path(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return gcs.ErrNotExist
+		}
+		return err
+	}
+	return os.WriteFile(path, b, perm)
+}
+func (d *diskBlobs) Created(_ context.Context, name string) (time.Time, error) {
+	info, err := os.Stat(d.path(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, gcs.ErrNotExist
+		}
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
+}
+func (d *diskBlobs) Delete(_ context.Context, name string) error {
+	err := os.Remove(d.path(name))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 func request(t *testing.T, h http.Handler, method, path string, body any, want int) []byte {
 	t.Helper()
@@ -167,10 +224,7 @@ func TestProductsRevisionsConcurrencyAndPersistence(t *testing.T) {
 func TestImportIdempotenceExportFrozenAndRestartRecovery(t *testing.T) {
 	s, h := testServer(t)
 	id := store.ID()
-	path := workbook.UploadPath(s.Dir, id)
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
-		t.Fatal(err)
-	}
+	tmp := filepath.Join(t.TempDir(), "wb.xlsx")
 	f := excelize.NewFile()
 	headers := []any{"Product name", "SKU", "Product cost", "Selling price", "Monthly orders"}
 	_ = f.SetSheetRow("Sheet1", "A1", &headers)
@@ -180,10 +234,18 @@ func TestImportIdempotenceExportFrozenAndRestartRecovery(t *testing.T) {
 		_ = f.SetSheetRow("Sheet1", cell, &row)
 	}
 	_ = f.SetCellFormula("Sheet1", "C4", "1+1")
-	if err := f.SaveAs(path); err != nil {
+	if err := f.SaveAs(tmp); err != nil {
 		t.Fatal(err)
 	}
 	f.Close()
+	upload, err := os.Open(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Blobs.Upload(context.Background(), workbook.UploadKey(id), upload, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+		t.Fatal(err)
+	}
+	upload.Close()
 	mapping := map[string]int{"name": 0, "sku": 1, "cost": 2, "price": 3, "orders": 4}
 	p := decodeAs[model.Preview](t, request(t, h, "POST", "/imports/preview", map[string]any{"uploadId": id, "sheet": "Sheet1", "mapping": mapping}, 200))
 	if len(s.Store.Read().Products) != 0 || len(p.Rows) != 5 || p.Rows[0].Input.SKU != "00007" || len(p.Rows[1].Errors) == 0 || len(p.Rows[2].Errors) == 0 || len(p.Rows[3].Errors) == 0 {
