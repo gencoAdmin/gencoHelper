@@ -32,6 +32,7 @@ export async function run(DecimalInput: any) {
  assert.equal(drafts.drafts.value.length,1,'Import should replace an untouched placeholder even with a custom shared margin')
  const shirtId = drafts.activeId.value
  drafts.active.value.input.price='72000'
+ drafts.active.value.channel='live'
  drafts.active.value.competitors.push({id:'',platform:'Marketplace',shop:'Shirt shop',price:'75000',sales:'10',rating:'5',url:''})
  drafts.active.value.removedImages.push('shirt-image')
  drafts.active.value.files.push({file:{} as File,url:'shirt-file'})
@@ -44,11 +45,13 @@ export async function run(DecimalInput: any) {
  assert.equal(drafts.active.value.removedImages.length,0)
  drafts.activeId.value=shirtId
  assert.equal(drafts.active.value.input.price,'72000')
+ assert.equal(drafts.active.value.channel,'live','Each draft must retain its analysis channel')
  assert.equal(drafts.active.value.competitors[0].shop,'Shirt shop')
  assert.equal(drafts.active.value.files[0].url,'shirt-file')
  assert.equal(drafts.active.value.removedImages[0],'shirt-image')
  drafts.activeId.value=manualId
  assert.equal(drafts.active.value.input.price,'90000')
+ assert.equal(drafts.active.value.channel,'','New drafts must use their own automatic recommendation')
  drafts.importRows([{row:3,input:{...emptyInput(),name:'Imported stool'},errors:[]}])
  assert.equal(drafts.drafts.value.length,3,'Import must preserve existing manual and imported drafts')
  assert.equal(drafts.drafts.value[0].input.sku,'00007','Leading-zero SKUs must survive draft switching')
@@ -100,6 +103,14 @@ export async function run(DecimalInput: any) {
  assert.ok((await decision('45000','40000','50000')).includes('within the observed range'))
  assert.ok((await decision(null,'40000','50000')).includes('unattainable with these rates'))
  assert.ok((await decision('45000','','')).includes('Add comparable competitor prices'))
+ const liveResult = {...result,channel:'live',monthlyProfit:'1234567',targetPrice:{status:'ok' as const,value:'61000'}}
+ const selectedEvaluation = {...evaluation,results:[result,liveResult]}
+ const selectedDecision = await renderToString(createSSRApp(ResearchInsights,{evaluation:selectedEvaluation,competitors:[],channel:'live'}).use(i18n))
+ assert.ok(selectedDecision.includes('TikTok Live'))
+ assert.ok(selectedDecision.includes('Rp 61,000'),'Decision analysis must use the selected channel target price')
+ const selectedResults = await renderToString(createSSRApp(Results,{evaluation:selectedEvaluation,channel:'live'}).use(i18n))
+ assert.ok(selectedResults.includes('Rp 1,234,567'),'Profit summary must use the selected channel')
+ assert.match(selectedResults,/aria-pressed="true"[^>]*><span[^>]*><i[^>]*channel-live/,'Selected row must expose its pressed state')
 
  // Go sorts JSON map keys; user edits can insert overrides in any order.
  const inputA={...emptyInput(),overrides:{shelf:{commission:'11',advertising:'4'}}}

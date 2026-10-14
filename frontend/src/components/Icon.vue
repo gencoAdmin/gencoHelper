@@ -16,6 +16,9 @@ const paths: Record<string, string> = {
  edit: 'M15 3l6 6 M3 21l2-7L17 2l5 5-12 12z', info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 11v6 M12 7h.01',
  file: 'M14 2H4v20h16V8z M14 2v6h6 M8 12h8 M8 16h8', heart: 'M20 4c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 0 9 8 16 8-7 12-12 8-16z',
  refresh: 'M20 7a9 9 0 1 0 1 9 M20 2v5h-5', arrowUp: 'M7 17L17 7 M7 7h10v10', menu: 'M3 6h18 M3 12h18 M3 18h18',
+ sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z M12 1v3 M12 20v3 M4.2 4.2l2.1 2.1 M17.7 17.7l2.1 2.1 M1 12h3 M20 12h3 M4.2 19.8l2.1-2.1 M17.7 6.3l2.1-2.1',
+ moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+ display: 'M3 4h18v12H3z M8 20h8 M12 16v4',
 }
 </script>
 <template><svg :width="size || 20" :height="size || 20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="paths[name] || paths.box" /></svg></template>

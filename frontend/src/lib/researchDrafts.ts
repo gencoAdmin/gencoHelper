@@ -7,7 +7,7 @@ export function useResearchDrafts() {
   id: ++nextId, input: row ? structuredClone(toRaw(row.input)) : emptyInput(),
   competitors: [] as Competitor[], existingImages: [] as ProductImage[],
   files: [] as { file: File; url: string }[], removedImages: [] as string[],
-  version: 0, productId: '', saved: false, evaluation: row?.evaluation,
+  version: 0, productId: '', saved: false, evaluation: row?.evaluation, channel: '',
   calculationError: '', localFields: {} as Record<string, string>,
  })
  const drafts = ref([makeDraft()])

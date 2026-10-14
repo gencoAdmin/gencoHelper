@@ -3,8 +3,10 @@ import { onMounted, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useApp } from './stores/app'
+import { useTheme } from './stores/theme'
 import Icon from './components/Icon.vue'
-const { t, locale } = useI18n(); const app = useApp(); const route = useRoute(); const mobileOpen = ref(false)
+const { t, locale } = useI18n(); const app = useApp(); const theme = useTheme(); const route = useRoute(); const mobileOpen = ref(false)
+const themeIcon = { light: 'sun', dark: 'moon', system: 'display' } as const
 const reload = () => window.location.reload()
 const nav = [{ path: '/', key: 'products', icon: 'grid' }, { path: '/research', key: 'research', icon: 'research' }]
 watch(locale, value => { localStorage.setItem('genco-language', value); document.documentElement.lang = value }, { immediate: true })
@@ -21,7 +23,7 @@ onMounted(() => app.loadSettings().catch(app.report))
   </aside>
   <div v-if="mobileOpen" class="sidebar-overlay" @click="mobileOpen = false"></div>
   <div class="main-shell">
-   <header class="topbar"><div class="topbar-context"><button class="icon-btn mobile-menu" :aria-label="t('products')" @click="mobileOpen = !mobileOpen"><Icon name="menu" /></button><span>Genco Finance</span><span class="breadcrumb-slash">/</span><strong>{{ t(route.path === '/' || route.path.startsWith('/products') ? 'products' : (route.path === '/import' ? 'imports' : route.path.slice(1))) }}</strong></div><div class="topbar-right"><Icon name="globe" :size="17" /><select v-model="locale" class="language-select" :aria-label="t('language')"><option value="en">English</option><option value="id">Indonesia</option><option value="zh">简体中文</option></select><span class="topbar-divider"></span><span class="avatar small">G</span></div></header>
+   <header class="topbar"><div class="topbar-context"><button class="icon-btn mobile-menu" :aria-label="t('products')" @click="mobileOpen = !mobileOpen"><Icon name="menu" /></button><span>Genco Finance</span><span class="breadcrumb-slash">/</span><strong>{{ t(route.path === '/' || route.path.startsWith('/products') ? 'products' : (route.path === '/import' ? 'imports' : route.path.slice(1))) }}</strong></div><div class="topbar-right"><Icon name="globe" :size="17" /><select v-model="locale" class="language-select" :aria-label="t('language')"><option value="en">English</option><option value="id">Indonesia</option><option value="zh">简体中文</option></select><span class="topbar-divider"></span><button class="icon-btn" :aria-label="t('theme') + ': ' + t('theme_' + theme.choice)" :title="t('theme') + ': ' + t('theme_' + theme.choice)" @click="theme.cycle()"><Icon :name="themeIcon[theme.choice]" :size="17" /></button><span class="topbar-divider"></span><span class="avatar small">G</span></div></header>
    <main>
     <div v-if="app.error" role="alert" class="alert error-alert"><Icon name="info" /><div><strong>{{ t('error') }}</strong><p>{{ app.conflict ? t('conflict') : app.error }}</p><ul v-if="Object.keys(app.fields).length"><li v-for="(message, field) in app.fields" :key="field">{{ t(String(field).split('.').at(-1) || String(field)) }}: {{ message }}</li></ul><button v-if="app.conflict" class="btn secondary compact" @click="reload">{{ t('reload') }}</button></div><button class="icon-btn" :aria-label="t('close')" @click="app.clear()"><Icon name="close" /></button></div>
     <div v-if="app.notice" role="status" class="alert success-alert"><Icon name="check" /><span>{{ app.notice }}</span><button class="icon-btn" :aria-label="t('close')" @click="app.clear()"><Icon name="close" /></button></div>

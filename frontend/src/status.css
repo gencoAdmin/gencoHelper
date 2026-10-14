@@ -1,0 +1,43 @@
+/* Status colors stay semantic when the brand palette changes. */
+:root {
+  --success-fg: #166534;
+  --success-bg: #edf9f0;
+  --success-border: #b9dfc5;
+}
+
+:root[data-theme="dark"] {
+  --success-fg: #86efac;
+  --success-bg: #152c20;
+  --success-border: #2c6241;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --success-fg: #86efac;
+    --success-bg: #152c20;
+    --success-border: #2c6241;
+  }
+}
+
+.success-alert,
+.badge.healthy,
+.badge.viable,
+.verdict-note.healthy,
+.verdict-note.viable {
+  color: var(--success-fg);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+
+.positive,
+.success-alert .icon-btn,
+.completion-icon,
+.illustration-check,
+.comparison-table .recommended .channel-button svg {
+  color: var(--success-fg);
+}
+
+.completion-icon,
+.illustration-check {
+  background: var(--success-bg);
+}

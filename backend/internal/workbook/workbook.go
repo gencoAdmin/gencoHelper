@@ -281,7 +281,7 @@ func headings(locale string) map[string]string {
 }
 func labels(locale, key string) string {
 	dict := map[string][3]string{
-		"shelf": {"Marketplace", "Marketplace", "货架电商"}, "live": {"TikTok Live", "TikTok Live", "TikTok 直播"}, "cod": {"COD distribution", "Distribusi COD", "COD 分销"}, "self": {"Own store", "Toko sendiri", "自营商城"}, "consignment": {"Consignment", "Konsinyasi", "寄售"},
+		"shelf": {"Marketplace", "Marketplace", "货架电商"}, "live": {"TikTok Live", "TikTok Live", "TikTok 直播"}, "cod": {"COD distribution", "Distribusi COD", "COD 分销"}, "self": {"Own Store (Genco Shop)", "Toko sendiri (Genco Shop)", "自营商城 (Genco Shop)"}, "consignment": {"Consignment", "Konsinyasi", "寄售"},
 		"healthy": {"Healthy", "Sehat", "健康"}, "viable": {"Viable", "Layak", "可行"}, "thin": {"Thin margin", "Margin tipis", "利润微薄"}, "unprofitable": {"Unprofitable", "Merugi", "亏损"},
 		"general": {"General", "Umum", "通用"}, "fashion": {"Fashion", "Fesyen", "时尚"}, "beauty": {"Beauty", "Kecantikan", "美妆"}, "electronics": {"Electronics", "Elektronik", "电子"}, "home": {"Home", "Rumah tangga", "家居"},
 		"preset": {"Channel preset", "Preset saluran", "渠道预设"}, "category": {"Category default", "Default kategori", "品类默认"}, "product": {"Product override", "Override produk", "产品覆盖"},

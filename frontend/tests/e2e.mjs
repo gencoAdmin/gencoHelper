@@ -87,6 +87,38 @@ try {
  await page.waitForURL(productUrl)
  await page.screenshot({ path: new URL('evaluation-detail.png', artifacts).pathname, fullPage: true })
  const product = await (await context.request.get(productUrl.replace(base, `${base}/api/v1`))).json()
+ // Selecting a channel must update the entire analysis, including saved scenarios.
+ const latest = product.revisions.at(-1)
+ const money = value => `Rp ${new Intl.NumberFormat('en', {maximumFractionDigits:0}).format(Number(value))}`
+ const overrides = Object.fromEntries(latest.results.map(r => [r.channel,r.rates]))
+ const competitorPrice = product.competitors[0].price
+ const atCompetitor = await (await context.request.post(`${base}/api/v1/calculate`, {data:{...latest.input,price:competitorPrice,marketMin:'',marketMax:'',overrides}})).json()
+ const atMaximum = await (await context.request.post(`${base}/api/v1/calculate`, {data:{...latest.input,price:latest.input.marketMax,marketMin:'',marketMax:'',overrides}})).json()
+ for (const [channel,label] of [['live','TikTok Live'],['cod','COD distribution'],['self','Own Store (Genco Shop)'],['consignment','Consignment'],['shelf','Marketplace']]) {
+  await page.getByLabel('Channel for analysis', {exact:true}).selectOption(channel)
+  const selected = latest.results.find(r => r.channel === channel)
+  await page.locator('.result-hero h2').getByText(label,{exact:true}).waitFor()
+  await page.locator('.result-hero .hero-numbers strong').getByText(money(selected.monthlyProfit),{exact:true}).waitFor()
+  await page.locator('.research-insights .panel-heading p').first().getByText(new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)).waitFor()
+  await page.locator('.decision-metrics strong').nth(1).getByText(money(selected.targetPrice.value),{exact:true}).waitFor()
+  await page.locator('.research-insights tbody tr').first().locator('td').nth(2).getByText(money(atCompetitor.results.find(r => r.channel === channel).monthlyProfit),{exact:true}).waitFor()
+  await page.locator('.market-scenario > strong').getByText(money(atMaximum.results.find(r => r.channel === channel).monthlyProfit),{exact:false}).waitFor()
+  assert.equal(await page.locator('.comparison-panel .focused .channel-button').getAttribute('aria-pressed'),'true')
+ }
+ // Clicking a numeric cell or using the keyboard must synchronize the selector.
+ await page.locator('.comparison-panel tbody tr').filter({hasText:'Own Store (Genco Shop)'}).locator('td').nth(2).click()
+ assert.equal(await page.getByLabel('Channel for analysis',{exact:true}).inputValue(),'self')
+ await page.locator('.comparison-panel .channel-button').filter({hasText:'TikTok Live'}).focus()
+ await page.keyboard.press('Enter')
+ assert.equal(await page.getByLabel('Channel for analysis',{exact:true}).inputValue(),'live')
+ for (const theme of ['light','dark']) {
+  await page.evaluate(theme => document.documentElement.setAttribute('data-theme',theme),theme)
+  const colors = await page.locator('.comparison-panel .focused td').evaluateAll(cells => cells.map(cell => getComputedStyle(cell).backgroundColor))
+  const otherColor = await page.locator('.comparison-panel tbody tr:not(.focused):not(.recommended) td').first().evaluate(cell => getComputedStyle(cell).backgroundColor)
+  assert.ok(colors.every(color => color === colors[0] && color !== otherColor && color !== 'rgba(0, 0, 0, 0)'),`${theme}: selected highlight must fill every cell`)
+  await page.locator('.comparison-panel').screenshot({path:new URL(`channel-selection-${theme}.png`,artifacts).pathname})
+ }
+ await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
  const image = await page.screenshot()
  const imageResponse = await context.request.post(`${base}/api/v1/products/${product.id}/images`, { multipart: { version:String(product.version), file: { name:'competitor.png', mimeType:'image/png', buffer:image } } })
  assert.equal(imageResponse.status(),201,await imageResponse.text())
@@ -134,6 +166,7 @@ try {
  await page.getByLabel('Product name', {exact:false}).first().waitFor()
  assert.equal(await page.locator('#name').inputValue(),'Bulk preview shirt')
  const firstId = await page.getByLabel('Product / SKU', {exact:true}).inputValue()
+ await page.getByLabel('Channel for analysis',{exact:true}).selectOption('live')
  await page.getByLabel('Selling price', {exact:true}).fill('72000')
  await page.locator('#sku').fill(`BULK-${Date.now()}`)
  await page.getByRole('tab', {name:/Market research/}).click()
@@ -144,6 +177,7 @@ try {
  await page.locator('#name').fill('Manual additional product')
  await page.getByLabel('Selling price', {exact:true}).fill('90000')
  await page.getByLabel('Product / SKU', {exact:true}).selectOption(firstId)
+ assert.equal(await page.getByLabel('Channel for analysis',{exact:true}).inputValue(),'live','Draft switching must preserve the selected channel')
  assert.equal(await page.getByLabel('Selling price', {exact:true}).inputValue(),'72000')
  await page.getByRole('tab', {name:/Market research/}).click()
  assert.equal(await page.getByLabel('Shop name 1', {exact:true}).inputValue(),'Imported competitor')

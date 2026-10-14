@@ -3,7 +3,10 @@ import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { i18n } from './locales'
+import { initThemeEarly } from './stores/theme'
 import './style.css'
+import './status.css'
+initThemeEarly() // set data-theme before mount to avoid a flash of the wrong theme
 const router = createRouter({ history: createWebHistory(), routes: [
  { path: '/', component: () => import('./pages/Products.vue') }, { path: '/calculator', redirect: '/research' },
  { path: '/research', component: () => import('./pages/Calculator.vue') },
